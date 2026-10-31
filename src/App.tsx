@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { PageEditor } from "./components/PageEditor";
 import { Sidebar } from "./components/Sidebar";
 import { SidebarIcon } from "./components/icons";
 import { WorkspaceProvider } from "./store/WorkspaceContext";
 import { useWorkspace } from "./store/useWorkspace";
+import { supabase } from "./lib/supabase";
+import { LoginForm } from "./components/auth/LoginForm";
+import { WorkspaceList } from "./components/auth/WorkspaceList";
 
 const THEME_KEY = "juvio.theme.v1";
 const SIDEBAR_KEY = "juvio.sidebar.open.v1";
@@ -28,7 +31,7 @@ function readSidebarOpen(): boolean {
   }
 }
 
-function Shell() {
+function Shell({ userId, workspaceId }: { userId: string; workspaceId: string }) {
   const { state } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
@@ -55,6 +58,10 @@ function Shell() {
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
   }, [state.activePageId, state.pages]);
 
+  const handleSignOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
   return (
     <div className={`app${sidebarOpen ? "" : " is-sidebar-collapsed"}`}>
       {sidebarOpen ? (
@@ -73,15 +80,93 @@ function Shell() {
           <SidebarIcon />
         </button>
       )}
-      <PageEditor key={state.activePageId ?? "empty"} />
+      <WorkspaceProvider workspaceId={workspaceId} userId={userId}>
+        <PageEditor key={state.activePageId ?? "empty"} />
+      </WorkspaceProvider>
+      <div className="auth-signout" aria-hidden="true">
+        <button type="button" className="ghost-signout" onClick={handleSignOut} title="Sign out">
+          ⟳
+        </button>
+      </div>
     </div>
   );
 }
 
+type AppView = "login" | "workspaces" | "editor";
+
 export default function App() {
+  const [view, setView] = useState<AppView>("login");
+  const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check existing session on load.
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error || !data.session) {
+        setLoading(false);
+        return;
+      }
+      setUser({ id: data.session.user.id, email: data.session.user.email ?? null });
+      setLoading(false);
+    });
+
+    // Listen for auth changes (login, logout, refresh).
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session) {
+          setUser({ id: session.user.id, email: session.user.email ?? null });
+          setView("workspaces");
+        }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setWorkspaceId(null);
+        setView("login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">Signing in…</div>
+      </div>
+    );
+  }
+
+  if (view === "login") {
+    return (
+      <LoginForm
+        onAuthenticated={() => {
+          setView("workspaces");
+        }}
+      />
+    );
+  }
+
+  if (view === "workspaces") {
+    if (!user) return <div className="auth-page"><div className="auth-card">Loading user…</div></div>;
+    return (
+      <WorkspaceList
+        userId={user.id}
+        onSelectWorkspace={(id) => {
+          setWorkspaceId(id);
+          setView("editor");
+        }}
+      />
+    );
+  }
+
+  // view === "editor"
+  if (!user || !workspaceId) return <div className="auth-page"><div className="auth-card">Select a workspace.</div></div>;
+
   return (
-    <WorkspaceProvider>
-      <Shell />
-    </WorkspaceProvider>
+    <Shell userId={user.id} workspaceId={workspaceId} />
   );
 }

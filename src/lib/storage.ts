@@ -20,7 +20,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isValidState(value: unknown): value is WorkspaceState {
+export function isValidState(value: unknown): value is WorkspaceState {
   if (!isRecord(value)) return false;
   if (value.version !== 1) return false;
   if (!isRecord(value.pages)) return false;

@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useReducer, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
+import { createSeedWorkspace } from "../lib/seed";
+import {
+  loadWorkspaceFromSupabase,
+  saveWorkspaceToSupabase,
+} from "../lib/supabase-storage";
 import type { WorkspaceAction } from "./actions";
 import { WorkspaceContext } from "./context";
 
@@ -130,16 +135,52 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
   }
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadWorkspace);
+interface WorkspaceProviderProps {
+  children: ReactNode;
+  workspaceId?: string;
+  userId?: string;
+}
 
+export function WorkspaceProvider({ children, workspaceId, userId }: WorkspaceProviderProps) {
+  const [state, dispatch] = useReducer(reducer, undefined, () =>
+    workspaceId && userId ? createSeedWorkspace() : loadWorkspace(),
+  );
+  const [isLoading, setIsLoading] = useState(!!workspaceId && !!userId);
+
+  // Load workspace from Supabase when a workspace is selected.
   useEffect(() => {
-    const timer = window.setTimeout(() => saveWorkspace(state), 200);
+    if (!workspaceId || !userId) {
+      setIsLoading(false);
+      return;
+    }
+
+    loadWorkspaceFromSupabase(workspaceId)
+      .then((supabaseState) => {
+        if (supabaseState) {
+          dispatch({ type: "reset", state: supabaseState });
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        // Fall back to localStorage seed on Supabase failure.
+        setIsLoading(false);
+      });
+  }, [workspaceId, userId, dispatch]);
+
+  // Persist to localStorage and Supabase (debounced).
+  useEffect(() => {
+    if (isLoading) return;
+    const timer = window.setTimeout(() => {
+      saveWorkspace(state);
+      if (workspaceId && userId) {
+        saveWorkspaceToSupabase(workspaceId, userId, state).catch(() => {
+          // Supabase save failed; localStorage still has the session data.
+        });
+      }
+    }, 200);
     return () => window.clearTimeout(timer);
-  }, [state]);
+  }, [state, workspaceId, userId, isLoading]);
 
   const value = useMemo(() => ({ state, dispatch }), [state]);
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
-
-
