@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
-import { createSeedWorkspace } from "../lib/seed";
+import { createSeedWorkspace, createEmptyPage } from "../lib/seed";
 import {
   loadWorkspaceFromSupabase,
   saveWorkspaceToSupabase,
@@ -158,6 +158,11 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       .then((supabaseState) => {
         if (supabaseState) {
           dispatch({ type: "reset", state: supabaseState });
+        } else {
+          // Workspace exists but has no pages yet. Create an initial empty page.
+          const initialPage = createEmptyPage(null, "Untitled");
+          dispatch({ type: "create_page", page: initialPage });
+          // Debounced save effect will persist to Supabase on next render.
         }
         setIsLoading(false);
       })
@@ -181,6 +186,6 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
     return () => window.clearTimeout(timer);
   }, [state, workspaceId, userId, isLoading]);
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  const value = useMemo(() => ({ state, dispatch, isLoading }), [state, isLoading]);
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

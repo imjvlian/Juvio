@@ -32,7 +32,7 @@ function readSidebarOpen(): boolean {
 }
 
 function Shell({ userId, workspaceId }: { userId: string; workspaceId: string }) {
-  const { state } = useWorkspace();
+  const { state, isLoading } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
 
@@ -61,6 +61,16 @@ function Shell({ userId, workspaceId }: { userId: string; workspaceId: string })
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="app">
+        <div className="auth-page">
+          <div className="auth-card">Loading workspace…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`app${sidebarOpen ? "" : " is-sidebar-collapsed"}`}>
@@ -108,6 +118,7 @@ export default function App() {
         return;
       }
       setUser({ id: data.session.user.id, email: data.session.user.email ?? null });
+      setView("workspaces");
       setLoading(false);
     });
 
