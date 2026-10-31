@@ -31,8 +31,8 @@ function readSidebarOpen(): boolean {
   }
 }
 
-function Shell({ userId, workspaceId }: { userId: string; workspaceId: string }) {
-  const { state, isLoading } = useWorkspace();
+function Shell() {
+  const workspace = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
 
@@ -54,15 +54,15 @@ function Shell({ userId, workspaceId }: { userId: string; workspaceId: string })
   }, [sidebarOpen]);
 
   useEffect(() => {
-    const page = state.activePageId ? state.pages[state.activePageId] : undefined;
+    const page = workspace.state.activePageId ? workspace.state.pages[workspace.state.activePageId] : undefined;
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
-  }, [state.activePageId, state.pages]);
+  }, [workspace.state.activePageId, workspace.state.pages]);
 
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
-  if (isLoading) {
+  if (workspace.isLoading) {
     return (
       <div className="app">
         <div className="auth-page">
@@ -90,9 +90,7 @@ function Shell({ userId, workspaceId }: { userId: string; workspaceId: string })
           <SidebarIcon />
         </button>
       )}
-      <WorkspaceProvider workspaceId={workspaceId} userId={userId}>
-        <PageEditor key={state.activePageId ?? "empty"} />
-      </WorkspaceProvider>
+      <PageEditor key={workspace.state.activePageId ?? "empty"} />
       <div className="auth-signout" aria-hidden="true">
         <button type="button" className="ghost-signout" onClick={handleSignOut} title="Sign out">
           ⟳
@@ -178,6 +176,8 @@ export default function App() {
   if (!user || !workspaceId) return <div className="auth-page"><div className="auth-card">Select a workspace.</div></div>;
 
   return (
-    <Shell userId={user.id} workspaceId={workspaceId} />
+    <WorkspaceProvider workspaceId={workspaceId} userId={user.id}>
+      <Shell />
+    </WorkspaceProvider>
   );
 }
