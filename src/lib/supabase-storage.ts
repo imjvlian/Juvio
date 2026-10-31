@@ -183,21 +183,26 @@ export async function createWorkspaceInSupabase(
   });
 
   const seed = createSeedWorkspace();
-  // Reset IDs so Supabase generates consistent ones; keep seed structure but remap.
+  const idMap = new Map<string, string>();
+
   const pages: Record<string, any> = {};
   const rootOrder: string[] = [];
 
+  // First pass: create pages with fresh valid UUIDs
   for (const [, page] of Object.entries(seed.pages)) {
-    const pageId = `${workspace.id}-${page.id}`;
-    pages[pageId] = { ...page, id: pageId };
-    if (!page.parentId) rootOrder.push(pageId);
+    const newPageId = crypto.randomUUID();
+    idMap.set(page.id, newPageId);
+    pages[newPageId] = { ...page, id: newPageId };
+    if (!page.parentId) rootOrder.push(newPageId);
   }
 
-  // Fix children references
-  for (const page of Object.values(seed.pages)) {
+  // Second pass: fix children references
+  for (const [, page] of Object.entries(seed.pages)) {
     if (page.parentId) {
-      const parentId = `${workspace.id}-${page.parentId}`;
-      if (pages[parentId]) pages[parentId].children = pages[parentId].children.map((c: string) => `${workspace.id}-${c}`);
+      const parentNewId = idMap.get(page.parentId);
+      if (parentNewId && pages[parentNewId]) {
+        pages[parentNewId].children = pages[parentNewId].children.map((c: string) => idMap.get(c)!);
+      }
     }
   }
 
