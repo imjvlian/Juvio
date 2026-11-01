@@ -25,20 +25,13 @@ export function createSeedWorkspace(): WorkspaceState {
     icon: "👋",
     parentId: null,
     blocks: [
-      block("paragraph", "Juvio is a local-first workspace for notes, docs, and light databases. It is a ground-up build inspired by the block editing model of tools like Notion — no proprietary code or assets are copied."),
+      block("paragraph", "Juvio is a local-first workspace for notes, docs, and light databases."),
       block("heading2", "What works right now"),
       block("bulleted", "Type <b>/</b> on an empty block to insert headings, lists, quotes, code, or a divider."),
       block("bulleted", "Markdown shortcuts work too: <code>#</code>, <code>##</code>, <code>-</code>, <code>1.</code>, <code>[]</code>, <code>&gt;</code>, <code>```</code> followed by space."),
       block("bulleted", "Select text and use <b>Ctrl/⌘ + B</b>, <b>I</b>, or <b>U</b> for inline formatting."),
       block("bulleted", "Press <b>Enter</b> to split a block, <b>Backspace</b> at the start to merge it back."),
       block("bulleted", "Everything is saved to this browser automatically."),
-      block("heading2", "Try it"),
-      block("todo", "Create a page from the sidebar", false),
-      block("todo", "Write a paragraph and turn it into a heading", true),
-      block("quote", "Local-first means your notes stay on this device, in your browser storage."),
-      block("code", "const idea = &quot;Juvio&quot;;\nconsole.log(`${idea} is ready.`);"),
-      block("divider"),
-      block("paragraph", "Use the <b>+</b> button beside a block to add one below, or the dots to change its type."),
     ],
   });
 
@@ -52,8 +45,6 @@ export function createSeedWorkspace(): WorkspaceState {
       block("bulleted", "<b>Enter</b> — new block, splitting at the caret."),
       block("bulleted", "<b>Backspace</b> at the start — merge with the block above."),
       block("bulleted", "<b>/</b> — open the insert menu."),
-      block("heading3", "Structure"),
-      block("paragraph", "Nest pages by hovering a sidebar item and pressing <b>+</b>. Pages keep their own block content."),
     ],
   });
 
@@ -72,10 +63,64 @@ export function createSeedWorkspace(): WorkspaceState {
 
   welcome.children = [quickStart.id];
 
+  // Team 6 HQ teamspace with 7 children
+  const team6Hq = page({
+    title: "Team 6 HQ",
+    icon: "🏠",
+    parentId: null,
+    blocks: [block("paragraph", "Team 6 HQ workspace.")],
+  });
+
+  const childTitles = [
+    { title: "Tasks", icon: "✅" },
+    { title: "Tasks", icon: "☑️" },
+    { title: "Projects", icon: "🎯" },
+    { title: "Wiki", icon: "📖" },
+    { title: "Meetings", icon: "📋" },
+    { title: "Docs", icon: "📄" },
+    { title: "TEAM ROLES", icon: "📄" },
+  ];
+
+  const teamChildren = childTitles.map((c) =>
+    page({ title: c.title, icon: c.icon, parentId: team6Hq.id, blocks: [block("paragraph")] })
+  );
+  team6Hq.children = teamChildren.map((c) => c.id);
+
+  // Private pages
+  const gettingStarted = page({
+    title: "Getting Started",
+    icon: "📄",
+    parentId: null,
+    blocks: [block("paragraph", "Getting started with Juvio.")],
+  });
+
+  const team7 = page({
+    title: "TEAM 7",
+    icon: "📄",
+    parentId: null,
+    blocks: [block("paragraph", "TEAM 7 workspace.")],
+  });
+
+  const allPages: Record<string, Page> = {};
+  const order: string[] = [];
+
+  function register(p: Page) {
+    allPages[p.id] = p;
+    order.push(p.id);
+  }
+
+  register(welcome);
+  register(quickStart);
+  register(ideas);
+  register(team6Hq);
+  teamChildren.forEach(register);
+  register(gettingStarted);
+  register(team7);
+
   return {
     version: 1,
-    pages: { [welcome.id]: welcome, [quickStart.id]: quickStart, [ideas.id]: ideas },
-    rootOrder: [welcome.id, ideas.id],
-    activePageId: welcome.id,
+    pages: allPages,
+    rootOrder: [team6Hq.id, welcome.id, ideas.id, gettingStarted.id, team7.id],
+    activePageId: team6Hq.id,
   };
 }

@@ -61,6 +61,7 @@ function Shell() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
   const [showTrash, setShowTrash] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const currentRoute = showTrash ? "trash" : showLibrary ? "library" : state.activePageId ?? "";
 
   const openTrash = useCallback(() => {
     setShowTrash(true);
@@ -121,14 +122,22 @@ function Shell() {
       dispatch({ type: "select_page", id: hashId });
       return;
     }
-    if ((showTrash || showLibrary) || !state.activePageId) return;
+    if (showTrash) return;
+    if (showLibrary) return;
+    if (!state.activePageId) {
+      // No page selected: default to Library view.
+      if (!hashId || hashId === "") {
+        window.history.replaceState(null, "", "#/library");
+        setShowLibrary(true);
+        setShowTrash(false);
+      }
+      return;
+    }
     const next = `#/${state.activePageId}`;
     if (window.location.hash !== next) {
       window.history.replaceState(null, "", next);
     }
   }, [isLoading, state.activePageId, state.pages, dispatch, showTrash, showLibrary]);
-
-  // Follow hash edits made by the user (address bar, pasted links).
   const pagesRef = useRef(state.pages);
   useEffect(() => {
     pagesRef.current = state.pages;
@@ -247,6 +256,7 @@ function Shell() {
           onOpenTrash={openTrash}
           onOpenLibrary={openLibrary}
           onSelectPage={selectPage}
+          currentRoute={currentRoute}
         />
       ) : (
         <button
@@ -285,6 +295,12 @@ function Shell() {
           </button>
         </div>
       )}
+      {/* Floating AI button */}
+      <button type="button" className="ai-float-btn" aria-label="Notion AI" title="Ask AI">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        </svg>
+      </button>
     </div>
   );
 }

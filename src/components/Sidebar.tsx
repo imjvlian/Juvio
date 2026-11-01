@@ -12,17 +12,15 @@ import {
   CalendarIcon,
   CustomizeIcon,
   UserIcon,
-  HouseIcon,
-  GettingStartedIcon,
-  TeamIcon,
-  LogOutIcon,
-  MoonIcon,
   PageIcon,
   PlusIcon,
   SearchIcon,
   SidebarIcon,
-  SunIcon,
-  TrashIcon,
+  CheckCircleIcon,
+  TargetIcon,
+  BookOpenIcon,
+  FileLinesIcon,
+  LibraryIcon,
 } from "./icons";
 
 const EXPANDED_KEY = "juvio.sidebar.expanded.v1";
@@ -47,6 +45,37 @@ function saveExpanded(ids: Set<string>): void {
   }
 }
 
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
+  home: HomeIcon,
+  house: HomeIcon,
+  check: CheckCircleIcon,
+  checkcircle: CheckCircleIcon,
+  checkbox: CheckCircleIcon,
+  target: TargetIcon,
+  projects: TargetIcon,
+  wiki: BookOpenIcon,
+  book: BookOpenIcon,
+  bookopen: BookOpenIcon,
+  meetings: FileLinesIcon,
+  filelines: FileLinesIcon,
+  docs: PageIcon,
+  file: PageIcon,
+  library: LibraryIcon,
+};
+
+function renderPageIcon(icon: string | null, width: number, height: number): React.ReactElement {
+  if (icon) {
+    const key = icon.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const Comp = ICON_MAP[key];
+    if (Comp) {
+      return <Comp width={width} height={height} />;
+    }
+    // Fallback: render emoji as text
+    return <span style={{ fontSize: width, lineHeight: 1 }}>{icon}</span>;
+  }
+  return <PageIcon width={width} height={height} />;
+}
+
 interface SidebarProps {
   theme: "light" | "dark";
   onToggleTheme: () => void;
@@ -55,6 +84,7 @@ interface SidebarProps {
   onOpenTrash: () => void;
   onOpenLibrary: () => void;
   onSelectPage: (id: string) => void;
+  currentRoute: string;
 }
 
 export function Sidebar({
@@ -65,8 +95,10 @@ export function Sidebar({
   onOpenTrash,
   onOpenLibrary,
   onSelectPage,
+  currentRoute,
 }: SidebarProps) {
   const { state, dispatch, favorites, trash } = useWorkspace();
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = loadExpanded();
@@ -182,7 +214,7 @@ export function Sidebar({
 
       {/* Quick navigation */}
       <div className="sidebar-quick">
-        <button type="button" className="nav-item is-active" aria-label="Home">
+        <button type="button" className={`nav-item${currentRoute === "/" || currentRoute === "" ? " is-active" : ""}`} aria-label="Home">
           <HomeIcon width={16} height={16} />
           <span>Home</span>
         </button>
@@ -206,7 +238,7 @@ export function Sidebar({
       </button>
       <button
         type="button"
-        className="nav-item is-active"
+        className={`nav-item${currentRoute === "library" ? " is-active" : ""}`}
         onClick={() => {
           onOpenLibrary();
         }}
@@ -246,7 +278,7 @@ export function Sidebar({
                     setPopupOpen(false);
                   }}
                 >
-                  <PageIcon width={14} height={14} />
+                  {renderPageIcon(page.icon, 14, 14)}
                   <span>{page.title || "Untitled"}</span>
                 </button>
               ))
@@ -267,7 +299,7 @@ export function Sidebar({
                     setPopupOpen(false);
                   }}
                 >
-                  <HouseIcon width={16} height={16} style={{ color: "#d97706" }} />
+                  {renderPageIcon(teamspace.icon, 16, 16)}
                   <span>{teamspace.title || "Untitled"}</span>
                 </button>
                 {visibleExpanded.has(teamspace.id) &&
@@ -284,7 +316,7 @@ export function Sidebar({
                           setPopupOpen(false);
                         }}
                       >
-                        <PageIcon width={14} height={14} />
+                        {renderPageIcon(child.icon, 14, 14)}
                         <span>{child.title || "Untitled"}</span>
                       </button>
                     );
@@ -303,7 +335,7 @@ export function Sidebar({
                 setPopupOpen(false);
               }}
             >
-              <GettingStartedIcon width={14} height={14} />
+              {renderPageIcon("📄", 14, 14)}
               <span>Getting Started</span>
             </button>
             <button
@@ -313,7 +345,7 @@ export function Sidebar({
                 setPopupOpen(false);
               }}
             >
-              <TeamIcon width={14} height={14} />
+              {renderPageIcon("📄", 14, 14)}
               <span>TEAM 7</span>
             </button>
             <button type="button" className="page-item add-new" onClick={() => createPage(null)}>
@@ -388,7 +420,10 @@ export function Sidebar({
           <CustomizeIcon width={16} height={16} />
           <span>Customize sidebar</span>
         </button>
-        <div className="footer-switcher">
+        <div
+          className={`footer-switcher${teamMenuOpen ? " is-active" : ""}`}
+          onClick={() => setTeamMenuOpen((open) => !open)}
+        >
           <UserIcon width={16} height={16} />
           <span>Team 6</span>
           <ChevronIcon width={10} height={10} />
@@ -399,40 +434,38 @@ export function Sidebar({
         <button type="button" className="footer-icon grid-btn" onClick={() => setPopupOpen(true)}>
           <GridIcon width={16} height={16} />
         </button>
-        <button type="button" className="footer-row" onClick={onOpenTrash}>
-          <TrashIcon width={16} height={16} />
-          <span>Trash</span>
-          {trash.length > 0 && <span className="footer-count">{trash.length}</span>}
-        </button>
-        <button type="button" className="footer-row" onClick={onToggleTheme}>
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
-        </button>
-        <button type="button" className="footer-row" onClick={onSignOut}>
-          <LogOutIcon width={16} height={16} />
-          <span>Log out</span>
-        </button>
-        <button
-          type="button"
-          className="footer-row footer-reset"
-          aria-label="Reset workspace"
-          onClick={handleReset}
-        >
-          <span aria-hidden="true">↺</span>
-          <span>Reset workspace</span>
-        </button>
       </div>
+
+      {/* Team 6 dropdown menu */}
+      {teamMenuOpen && (
+        <div className="popup-backdrop" onClick={() => setTeamMenuOpen(false)}>
+          <div className="popup" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="popup-item" onClick={() => { setTeamMenuOpen(false); onToggleTheme(); }}>
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
+            <button type="button" className="popup-item" onClick={() => { setTeamMenuOpen(false); onSignOut(); }}>
+              Log out
+            </button>
+            <button type="button" className="popup-item" onClick={() => { setTeamMenuOpen(false); handleReset(); }}>
+              Reset workspace
+            </button>
+            <button type="button" className="popup-item" onClick={() => { setTeamMenuOpen(false); onOpenTrash(); }}>
+              Trash {trash.length > 0 ? `(${trash.length})` : ""}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Popup menu (app launcher) */}
       {popupOpen && (
         <div className="popup-backdrop" onClick={() => setPopupOpen(false)}>
           <div className="popup" onClick={(event) => event.stopPropagation()}>
-            <div className="popup-item">Library</div>
+            <div className="popup-item" onClick={() => { setPopupOpen(false); onOpenLibrary(); }}>Library</div>
             <div className="popup-item">AI Meeting Notes</div>
             <div className="popup-item">Skills</div>
             <div className="popup-item">My Tasks</div>
             <div className="popup-item popup-hover">Marketplace</div>
-            <div className="popup-item">Trash</div>
+            <div className="popup-item" onClick={() => { setPopupOpen(false); onOpenTrash(); }}>Trash</div>
           </div>
         </div>
       )}

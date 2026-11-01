@@ -301,3 +301,52 @@ export function TeamIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function CheckCircleIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function TargetIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function BookOpenIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h6z" />
+    </svg>
+  );
+}
+
+export function FileLinesIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <line x1="10" y1="9" x2="8" y2="9" />
+    </svg>
+  );
+}
+
+export function LibraryIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="2" y="3" width="8" height="18" rx="1" ry="1" />
+      <rect x="14" y="3" width="8" height="18" rx="1" ry="1" />
+      <path d="M2 21h20V3H2z" />
+    </svg>
+  );
+}
