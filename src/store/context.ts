@@ -19,6 +19,9 @@ export interface WorkspaceContextValue {
   moveToTrash: (id: string) => void;
   restoreFromTrash: (entryId: string) => void;
   deleteForever: (entryId: string) => void;
+  /** Most recent page moved to Trash, used for the Undo toast. */
+  lastTrashed: { entryId: string; title: string } | null;
+  clearLastTrashed: () => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);

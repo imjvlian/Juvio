@@ -131,7 +131,7 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
         if (!rootOrder.includes(root.id)) rootOrder = [...rootOrder, root.id];
       }
 
-      return { ...state, pages, rootOrder, activePageId: root.id };
+      return { ...state, pages, rootOrder };
     }
 
     case "duplicate_page": {
@@ -351,6 +351,7 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
   const scope = workspaceId ?? "local";
   const [trash, setTrash] = useState<TrashEntry[]>(() => loadTrash(scope));
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites(scope));
+  const [lastTrashed, setLastTrashed] = useState<{ entryId: string; title: string } | null>(null);
 
   useEffect(() => {
     saveTrash(scope, trash);
@@ -483,19 +484,16 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       if (!page) return;
       const pages = collectSubtree(state.pages, id);
       const removed = new Set(pages.map((entry) => entry.id));
-      setTrash((current) =>
-        [
-          {
-            id: createId(),
-            rootId: id,
-            title: page.title.trim() || "Untitled",
-            icon: page.icon,
-            deletedAt: Date.now(),
-            pages,
-          },
-          ...current,
-        ].slice(0, 20),
-      );
+      const entry: TrashEntry = {
+        id: createId(),
+        rootId: id,
+        title: page.title.trim() || "Untitled",
+        icon: page.icon,
+        deletedAt: Date.now(),
+        pages,
+      };
+      setTrash((current) => [entry, ...current].slice(0, 20));
+      setLastTrashed({ entryId: entry.id, title: entry.title });
       setFavorites((current) => current.filter((favorite) => !removed.has(favorite)));
       dispatch({ type: "delete_page", id });
     },
@@ -508,13 +506,17 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       if (!entry) return;
       dispatch({ type: "restore_pages", pages: entry.pages, rootId: entry.rootId });
       setTrash((current) => current.filter((candidate) => candidate.id !== entryId));
+      setLastTrashed((current) => (current?.entryId === entryId ? null : current));
     },
     [trash, dispatch],
   );
 
   const deleteForever = useCallback((entryId: string) => {
     setTrash((current) => current.filter((candidate) => candidate.id !== entryId));
+    setLastTrashed((current) => (current?.entryId === entryId ? null : current));
   }, []);
+
+  const clearLastTrashed = useCallback(() => setLastTrashed(null), []);
 
   const undo = useCallback(() => {
     if (!canUndo) return;
@@ -564,6 +566,8 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       moveToTrash,
       restoreFromTrash,
       deleteForever,
+      lastTrashed,
+      clearLastTrashed,
     }),
     [
       state,
@@ -580,6 +584,8 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       moveToTrash,
       restoreFromTrash,
       deleteForever,
+      lastTrashed,
+      clearLastTrashed,
     ],
   );
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

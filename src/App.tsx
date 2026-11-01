@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { PageEditor } from "./components/PageEditor";
 import { Sidebar } from "./components/Sidebar";
+import { TrashView } from "./components/TrashView";
 import { SidebarIcon } from "./components/icons";
 import { WorkspaceProvider } from "./store/WorkspaceContext";
 import { useWorkspace } from "./store/useWorkspace";
@@ -43,25 +44,71 @@ function readWorkspaceId(): string | null {
 }
 
 function Shell() {
-  const { state, dispatch, isLoading, canUndo, canRedo, undo, redo } = useWorkspace();
+  const {
+    state,
+    dispatch,
+    isLoading,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    lastTrashed,
+    clearLastTrashed,
+    restoreFromTrash,
+  } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
+  const [showTrash, setShowTrash] = useState(false);
+
+  const openTrash = useCallback(() => {
+    setShowTrash(true);
+    window.history.replaceState(null, "", "#/trash");
+  }, []);
+
+  const selectPage = useCallback(
+    (id: string) => {
+      setShowTrash(false);
+      window.history.replaceState(null, "", `#/${id}`);
+      dispatch({ type: "select_page", id });
+    },
+    [dispatch],
+  );
+
+  // Selecting a page leaves the Trash view.
+  const lastActiveRef = useRef(state.activePageId);
+  useEffect(() => {
+    if (isLoading) {
+      lastActiveRef.current = state.activePageId;
+      return;
+    }
+    if (lastActiveRef.current === state.activePageId) return;
+    lastActiveRef.current = state.activePageId;
+    setShowTrash(false);
+    if (state.activePageId && window.location.hash === "#/trash") {
+      window.history.replaceState(null, "", `#/${state.activePageId}`);
+    }
+  }, [isLoading, state.activePageId]);
 
   // Keep the URL in sync with the active page so links can be shared or refreshed.
   // A deep link wins over the restored selection once the workspace has loaded.
   useEffect(() => {
     if (isLoading) return;
     const hashId = window.location.hash.replace(/^#\/?/, "");
+    if (hashId === "trash") {
+      setShowTrash(true);
+      return;
+    }
     if (hashId && hashId !== state.activePageId && state.pages[hashId]) {
+      setShowTrash(false);
       dispatch({ type: "select_page", id: hashId });
       return;
     }
-    if (!state.activePageId) return;
+    if (showTrash || !state.activePageId) return;
     const next = `#/${state.activePageId}`;
     if (window.location.hash !== next) {
       window.history.replaceState(null, "", next);
     }
-  }, [isLoading, state.activePageId, state.pages, dispatch]);
+  }, [isLoading, state.activePageId, state.pages, dispatch, showTrash]);
 
   // Follow hash edits made by the user (address bar, pasted links).
   const pagesRef = useRef(state.pages);
@@ -71,6 +118,10 @@ function Shell() {
   useEffect(() => {
     function applyHash() {
       const id = window.location.hash.replace(/^#\/?/, "");
+      if (id === "trash") {
+        setShowTrash(true);
+        return;
+      }
       if (id && pagesRef.current[id]) {
         dispatch({ type: "select_page", id });
       }
@@ -78,6 +129,13 @@ function Shell() {
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
   }, [dispatch]);
+
+  // Auto-dismiss the "moved to Trash" toast.
+  useEffect(() => {
+    if (!lastTrashed) return;
+    const timer = window.setTimeout(clearLastTrashed, 6000);
+    return () => window.clearTimeout(timer);
+  }, [lastTrashed, clearLastTrashed]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -97,9 +155,13 @@ function Shell() {
   }, [sidebarOpen]);
 
   useEffect(() => {
+    if (showTrash) {
+      document.title = "Trash · Juvio";
+      return;
+    }
     const page = state.activePageId ? state.pages[state.activePageId] : undefined;
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
-  }, [state.activePageId, state.pages]);
+  }, [showTrash, state.activePageId, state.pages]);
 
   // Global keyboard shortcuts: undo / redo.
   useEffect(() => {
@@ -152,6 +214,8 @@ function Shell() {
           onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
           onCollapse={() => setSidebarOpen(false)}
           onSignOut={handleSignOut}
+          onOpenTrash={openTrash}
+          onSelectPage={selectPage}
         />
       ) : (
         <button
@@ -163,7 +227,31 @@ function Shell() {
           <SidebarIcon />
         </button>
       )}
-      <PageEditor key={state.activePageId ?? "empty"} />
+      {showTrash ? (
+        <TrashView />
+      ) : (
+        <PageEditor key={state.activePageId ?? "empty"} />
+      )}
+      {lastTrashed && (
+        <div className="trash-toast" role="status">
+          <span className="trash-toast-text">“{lastTrashed.title}” moved to Trash</span>
+          <button
+            type="button"
+            className="trash-toast-undo"
+            onClick={() => restoreFromTrash(lastTrashed.entryId)}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="trash-toast-close"
+            aria-label="Dismiss"
+            onClick={clearLastTrashed}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

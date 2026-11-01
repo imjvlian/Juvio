@@ -52,20 +52,20 @@ interface SidebarProps {
   onToggleTheme: () => void;
   onCollapse: () => void;
   onSignOut: () => void;
+  onOpenTrash: () => void;
+  onSelectPage: (id: string) => void;
 }
 
-export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: SidebarProps) {
-  const {
-    state,
-    dispatch,
-    favorites,
-    trash,
-    moveToTrash,
-    restoreFromTrash,
-    deleteForever,
-  } = useWorkspace();
+export function Sidebar({
+  theme,
+  onToggleTheme,
+  onCollapse,
+  onSignOut,
+  onOpenTrash,
+  onSelectPage,
+}: SidebarProps) {
+  const { state, dispatch, favorites, trash, moveToTrash } = useWorkspace();
   const [query, setQuery] = useState("");
-  const [trashOpen, setTrashOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = loadExpanded();
     if (stored) return stored;
@@ -188,7 +188,7 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
                 key={page.id}
                 type="button"
                 className={`favorite-item${page.id === state.activePageId ? " is-active" : ""}`}
-                onClick={() => dispatch({ type: "select_page", id: page.id })}
+                onClick={() => onSelectPage(page.id)}
               >
                 <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
                 <span className="tree-title">{page.title || "Untitled"}</span>
@@ -222,7 +222,7 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
                   key={page.id}
                   type="button"
                   className={`search-result${page.id === state.activePageId ? " is-active" : ""}`}
-                  onClick={() => dispatch({ type: "select_page", id: page.id })}
+                  onClick={() => onSelectPage(page.id)}
                 >
                   <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
                   <span className="search-result-copy">
@@ -247,7 +247,7 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
                   activeId={state.activePageId}
                   expanded={visibleExpanded}
                   onToggle={toggle}
-                  onSelect={(pageId) => dispatch({ type: "select_page", id: pageId })}
+                  onSelect={onSelectPage}
                   onCreateChild={(pageId) => createPage(pageId)}
                   onDelete={deletePage}
                 />
@@ -288,80 +288,29 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
       </div>
 
       <div className="sidebar-footer">
-        <button type="button" className="footer-button" onClick={onToggleTheme}>
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          {theme === "dark" ? "Light mode" : "Dark mode"}
-        </button>
-        <button type="button" className="ghost-icon" aria-label="Sign out" title="Sign out" onClick={onSignOut}>
-          <LogOutIcon />
-        </button>
-        <button type="button" className="footer-button" onClick={() => setTrashOpen(true)}>
+        <button type="button" className="footer-row" onClick={onOpenTrash}>
           <TrashIcon />
-          Trash{trash.length > 0 ? ` (${trash.length})` : ""}
+          <span>Trash</span>
+          {trash.length > 0 && <span className="footer-count">{trash.length}</span>}
         </button>
-        <button type="button" className="ghost-icon" aria-label="Reset workspace" title="Reset workspace" onClick={handleReset}>
+        <button type="button" className="footer-row" onClick={onToggleTheme}>
+          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
+        <button type="button" className="footer-row" onClick={onSignOut}>
+          <LogOutIcon />
+          <span>Log out</span>
+        </button>
+        <button
+          type="button"
+          className="footer-row footer-reset"
+          aria-label="Reset workspace"
+          onClick={handleReset}
+        >
           <span aria-hidden="true">↺</span>
+          <span>Reset workspace</span>
         </button>
       </div>
-
-      {trashOpen && (
-        <div className="modal-backdrop" onClick={() => setTrashOpen(false)}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Trash"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <h2>Trash</h2>
-              <button
-                type="button"
-                className="ghost-icon"
-                aria-label="Close trash"
-                onClick={() => setTrashOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              {trash.length === 0 ? (
-                <p className="modal-empty">Trash is empty.</p>
-              ) : (
-                trash.map((entry) => (
-                  <div key={entry.id} className="trash-row">
-                    <span className="tree-icon">{entry.icon ?? <PageIcon />}</span>
-                    <span className="trash-copy">
-                      <span className="trash-title">{entry.title}</span>
-                      <small>
-                        {entry.pages.length} page{entry.pages.length === 1 ? "" : "s"} ·{" "}
-                        {new Date(entry.deletedAt).toLocaleString()}
-                      </small>
-                    </span>
-                    <button
-                      type="button"
-                      className="trash-action"
-                      onClick={() => {
-                        restoreFromTrash(entry.id);
-                        setTrashOpen(false);
-                      }}
-                    >
-                      Restore
-                    </button>
-                    <button
-                      type="button"
-                      className="trash-action is-danger"
-                      onClick={() => deleteForever(entry.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
