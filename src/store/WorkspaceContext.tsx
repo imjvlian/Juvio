@@ -178,6 +178,42 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       return { ...state, pages, activePageId: state.activePageId };
     }
 
+    case "save_template": {
+      const page = state.pages[action.pageId];
+      if (!page) return state;
+      const templates = state.templates ?? {};
+      templates[action.name] = {
+        id: createId(),
+        name: action.name,
+        pageId: action.pageId,
+        blocks: page.blocks,
+        createdAt: Date.now(),
+      };
+      return { ...state, templates };
+    }
+
+    case "delete_template": {
+      const templates = { ...(state.templates ?? {}) };
+      delete templates[action.id];
+      return { ...state, templates };
+    }
+
+    case "create_page_from_template": {
+      const template = state.templates?.[action.templateId];
+      if (!template) return state;
+      const newPage = createEmptyPage(action.parentId, template.name);
+      const newBlocks = template.blocks.map((b) => ({ ...b, id: createId() }));
+      const pages = { ...state.pages, [newPage.id]: { ...newPage, blocks: newBlocks } };
+      let rootOrder = state.rootOrder;
+      if (!action.parentId) {
+        rootOrder = [...rootOrder, newPage.id];
+      } else if (state.pages[action.parentId]) {
+        const parent = state.pages[action.parentId];
+        pages[parent.id] = { ...parent, children: [...parent.children, newPage.id], updatedAt: Date.now() };
+      }
+      return { ...state, pages, rootOrder, activePageId: newPage.id };
+    }
+
     case "update_page":
       return withPage(state, action.id, (page) => ({ ...page, ...action.patch }));
 

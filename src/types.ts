@@ -29,11 +29,20 @@ export interface Page {
   updatedAt: number;
 }
 
+export interface Template {
+  id: string;
+  name: string;
+  pageId: string;
+  blocks: Block[];
+  createdAt: number;
+}
+
 export interface WorkspaceState {
   version: 1;
   pages: Record<string, Page>;
   rootOrder: string[];
   activePageId: string | null;
+  templates?: Record<string, Template>;
 }
 
 export type BlockPatch = Partial<Pick<Block, "type" | "html" | "checked">>;

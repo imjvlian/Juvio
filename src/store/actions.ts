@@ -6,6 +6,9 @@ export type WorkspaceAction =
   | { type: "delete_page"; id: string }
   | { type: "duplicate_page"; id: string }
   | { type: "move_page"; id: string; parentId: string | null }
+  | { type: "save_template"; pageId: string; name: string }
+  | { type: "delete_template"; id: string }
+  | { type: "create_page_from_template"; templateId: string; parentId: string | null }
   | {
       type: "update_page";
       id: string;
