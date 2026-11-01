@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
 import { createSeedWorkspace, createEmptyPage } from "../lib/seed";
@@ -135,6 +135,21 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
   }
 }
 
+// Actions that mutate content and should be recorded in history.
+const CONTENT_ACTIONS = new Set([
+  "create_page",
+  "delete_page",
+  "update_page",
+  "add_block",
+  "update_block",
+  "delete_block",
+  "set_blocks",
+  "reset",
+]);
+
+const COALESCE_WINDOW = 800; // ms — rapid same-block updates merge into one history entry
+const MAX_HISTORY = 100;
+
 interface WorkspaceProviderProps {
   children: ReactNode;
   workspaceId?: string;
@@ -142,35 +157,140 @@ interface WorkspaceProviderProps {
 }
 
 export function WorkspaceProvider({ children, workspaceId, userId }: WorkspaceProviderProps) {
-  const [state, dispatch] = useReducer(reducer, undefined, () =>
+  const [state, baseDispatch] = useReducer(reducer, undefined, () =>
     workspaceId && userId ? createSeedWorkspace() : loadWorkspace(),
   );
+  const [past, setPast] = useState<WorkspaceState[]>([]);
+  const [future, setFuture] = useState<WorkspaceState[]>([]);
   const [isLoading, setIsLoading] = useState(!!workspaceId && !!userId);
+
+  const lastActionRef = useRef<{ type: string; id?: string; blockId?: string; time: number } | null>(null);
 
   // Load workspace from Supabase when a workspace is selected.
   useEffect(() => {
     if (!workspaceId || !userId) {
       setIsLoading(false);
+      setPast([]);
+      setFuture([]);
       return;
     }
 
     loadWorkspaceFromSupabase(workspaceId)
       .then((supabaseState) => {
         if (supabaseState) {
-          dispatch({ type: "reset", state: supabaseState });
+          // Clear history on fresh load — undo should not cross session boundaries.
+          setPast([]);
+          setFuture([]);
+          lastActionRef.current = null;
+          baseDispatch({ type: "reset", state: supabaseState });
         } else {
           // Workspace exists but has no pages yet. Create an initial empty page.
           const initialPage = createEmptyPage(null, "Untitled");
-          dispatch({ type: "create_page", page: initialPage });
-          // Debounced save effect will persist to Supabase on next render.
+          baseDispatch({ type: "create_page", page: initialPage });
+          setPast([]);
+          setFuture([]);
+          lastActionRef.current = null;
         }
         setIsLoading(false);
       })
       .catch(() => {
-        // Fall back to localStorage seed on Supabase failure.
+        setPast([]);
+        setFuture([]);
+        lastActionRef.current = null;
         setIsLoading(false);
       });
-  }, [workspaceId, userId, dispatch]);
+  }, [workspaceId, userId, baseDispatch]);
+
+  // Wrapped dispatch: records content mutations into history with coalescing.
+  const dispatch = useCallback(
+    (action: WorkspaceAction) => {
+      if (action.type === "reset") {
+        // Reset clears history — undo should not cross session/load boundaries.
+        setPast([]);
+        setFuture([]);
+        lastActionRef.current = null;
+        baseDispatch(action);
+        return;
+      }
+
+      const isContentChange = CONTENT_ACTIONS.has(action.type);
+      const now = Date.now();
+
+      if (isContentChange) {
+        const last = lastActionRef.current;
+        let shouldPush = true;
+
+        // Coalescing: merge rapid same-block html updates into one entry.
+        if (
+          action.type === "update_block" &&
+          last?.type === "update_block" &&
+          last.blockId === (action as { blockId?: string }).blockId &&
+          now - last.time < COALESCE_WINDOW
+        ) {
+          shouldPush = false;
+          setPast((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = state;
+            return copy;
+          });
+        } else if (
+          action.type === "update_page" &&
+          last?.type === "update_page" &&
+          last.id === (action as { id: string }).id &&
+          now - last.time < COALESCE_WINDOW
+        ) {
+          shouldPush = false;
+          setPast((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = state;
+            return copy;
+          });
+        }
+
+        if (shouldPush) {
+          setPast((prev) => {
+            const next = [...prev, state];
+            if (next.length > MAX_HISTORY) return next.slice(-MAX_HISTORY);
+            return next;
+          });
+          setFuture([]);
+        }
+
+        lastActionRef.current = {
+          type: action.type,
+          id: (action as { id?: string }).id,
+          blockId: (action as { blockId?: string }).blockId,
+          time: now,
+        };
+      } else if (action.type === "select_page") {
+        lastActionRef.current = null;
+      }
+
+      baseDispatch(action);
+    },
+    [state, baseDispatch],
+  );
+
+  const canUndo = past.length > 0;
+  const canRedo = future.length > 0;
+
+  const undo = useCallback(() => {
+    if (!canUndo) return;
+    const previous = past[past.length - 1];
+    setPast((prev) => prev.slice(0, -1));
+    setFuture((fut) => [state, ...fut]);
+    lastActionRef.current = null;
+    baseDispatch({ type: "reset", state: previous });
+  }, [canUndo, state, past]);
+
+  const redo = useCallback(() => {
+    if (!canRedo) return;
+    const next = future[future.length - 1];
+    setFuture((fut) => fut.slice(0, -1));
+    setPast((prev) => [...prev, state]);
+    lastActionRef.current = null;
+    baseDispatch({ type: "reset", state: next });
+  }, [canRedo, state, future]);
 
   // Persist to localStorage and Supabase (debounced).
   useEffect(() => {
@@ -186,6 +306,9 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
     return () => window.clearTimeout(timer);
   }, [state, workspaceId, userId, isLoading]);
 
-  const value = useMemo(() => ({ state, dispatch, isLoading }), [state, isLoading]);
+  const value = useMemo(
+    () => ({ state, dispatch, isLoading, canUndo, canRedo, undo, redo }),
+    [state, dispatch, isLoading, canUndo, canRedo, undo, redo],
+  );
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

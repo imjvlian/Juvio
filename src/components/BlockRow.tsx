@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Block, BlockType } from "../types";
-import { caretOffset, caretRect, normalizeHtml, plainText, placeCaretAtOffset, splitAtCaret } from "../lib/caret";
+import { caretOffset, caretRect, normalizeHtml, plainText, placeCaret, placeCaretAtOffset, splitAtCaret } from "../lib/caret";
 import { useWorkspace } from "../store/useWorkspace";
 import { MoreIcon, PlusIcon } from "./icons";
 import type { MenuAnchor, MenuMode } from "./BlockMenu";
@@ -84,6 +84,7 @@ export function BlockRow({
     if (lastLocalHtml.current === block.html) return;
     if (document.activeElement === el) {
       el.innerHTML = block.html;
+      placeCaret(el, "end");
       return;
     }
     if (el.innerHTML !== block.html) el.innerHTML = block.html;

@@ -32,7 +32,7 @@ function readSidebarOpen(): boolean {
 }
 
 function Shell() {
-  const workspace = useWorkspace();
+  const { state, isLoading, canUndo, canRedo, undo, redo } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
 
@@ -54,15 +54,44 @@ function Shell() {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    const page = workspace.state.activePageId ? workspace.state.pages[workspace.state.activePageId] : undefined;
+    const page = state.activePageId ? state.pages[state.activePageId] : undefined;
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
-  }, [workspace.state.activePageId, workspace.state.pages]);
+  }, [state.activePageId, state.pages]);
+
+  // Global keyboard shortcuts: undo / redo.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      const mod = isMac ? event.metaKey : event.ctrlKey;
+
+      if (!mod || event.altKey) return;
+
+      if (event.key === "z" && !event.shiftKey) {
+        if (canUndo) {
+          event.preventDefault();
+          undo();
+        }
+        return;
+      }
+
+      if ((event.key === "z" && event.shiftKey) || event.key === "y") {
+        if (canRedo) {
+          event.preventDefault();
+          redo();
+        }
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canUndo, canRedo, undo, redo]);
 
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
 
-  if (workspace.isLoading) {
+  if (isLoading) {
     return (
       <div className="app">
         <div className="auth-page">
@@ -90,7 +119,7 @@ function Shell() {
           <SidebarIcon />
         </button>
       )}
-      <PageEditor key={workspace.state.activePageId ?? "empty"} />
+      <PageEditor key={state.activePageId ?? "empty"} />
       <div className="auth-signout" aria-hidden="true">
         <button type="button" className="ghost-signout" onClick={handleSignOut} title="Sign out">
           ⟳

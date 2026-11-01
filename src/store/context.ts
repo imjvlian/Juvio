@@ -6,6 +6,10 @@ export interface WorkspaceContextValue {
   state: WorkspaceState;
   dispatch: Dispatch<WorkspaceAction>;
   isLoading: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
