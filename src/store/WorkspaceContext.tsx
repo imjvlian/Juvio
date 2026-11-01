@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
 import { createSeedWorkspace, createEmptyPage } from "../lib/seed";
+import { migrateSeedWorkspace } from "../lib/migration";
 import { createId } from "../lib/id";
 import { loadFavorites, saveFavorites } from "../lib/favorites";
 import { collectSubtree, loadTrash, saveTrash, type TrashEntry } from "../lib/trash";
 import {
   loadWorkspaceFromSupabase,
+  loadWorkspaceName,
+  loadWorkspaceMemberCount,
+  loadInboxItems,
   saveWorkspaceToSupabase,
 } from "../lib/supabase-storage";
+import { loadSeenPages, saveSeenPages, type InboxItem } from "../lib/inbox";
 import type { WorkspaceAction } from "./actions";
 import { WorkspaceContext } from "./context";
 
@@ -46,8 +51,7 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
     }
 
     case "create_page": {
-      const { page, afterId } = action;
-      const pages = { ...state.pages, [page.id]: page };
+      const { page, afterId } = action;      const pages = { ...state.pages, [page.id]: page };
       let rootOrder = state.rootOrder;
       let parentChildren: string[] | null = null;
 
@@ -68,7 +72,12 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       }
 
       void parentChildren;
-      return { ...state, pages, rootOrder, activePageId: page.id };
+      return {
+        ...state,
+        pages,
+        rootOrder,
+        activePageId: action.select === false ? state.activePageId : page.id,
+      };
     }
 
     case "delete_page": {
@@ -342,13 +351,19 @@ interface WorkspaceProviderProps {
 
 export function WorkspaceProvider({ children, workspaceId, userId }: WorkspaceProviderProps) {
   const [state, baseDispatch] = useReducer(reducer, undefined, () =>
-    workspaceId && userId ? createSeedWorkspace() : loadWorkspace(),
+    workspaceId && userId
+      ? createSeedWorkspace()
+      : migrateSeedWorkspace(loadWorkspace(), "local"),
   );
   const [past, setPast] = useState<WorkspaceState[]>([]);
   const [future, setFuture] = useState<WorkspaceState[]>([]);
   const [isLoading, setIsLoading] = useState(!!workspaceId && !!userId);
 
   const scope = workspaceId ?? "local";
+  const [workspaceName, setWorkspaceName] = useState<string>("Team 6");
+  const [memberCount, setMemberCount] = useState<number>(1);
+  const [inbox, setInbox] = useState<InboxItem[]>([]);
+  const [seenPageIds, setSeenPageIds] = useState<Set<string>>(() => loadSeenPages(scope));
   const [trash, setTrash] = useState<TrashEntry[]>(() => loadTrash(scope));
   const [favorites, setFavorites] = useState<string[]>(() => loadFavorites(scope));
   const [lastTrashed, setLastTrashed] = useState<{ entryId: string; title: string } | null>(null);
@@ -361,6 +376,50 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
     saveFavorites(scope, favorites);
   }, [scope, favorites]);
 
+  useEffect(() => {
+    saveSeenPages(scope, seenPageIds);
+  }, [scope, seenPageIds]);
+
+  // Workspace members and inbox entries come from the database, not from
+  // placeholders. Local-only workspaces have a single member and no inbox.
+  const refreshInbox = useCallback(() => {
+    if (!workspaceId || !userId) {
+      setMemberCount(1);
+      setInbox([]);
+      return;
+    }
+    loadWorkspaceMemberCount(workspaceId)
+      .then(setMemberCount)
+      .catch(() => {
+        // Keep the last known count when the lookup fails.
+      });
+    loadInboxItems(workspaceId, userId)
+      .then(setInbox)
+      .catch(() => {
+        // Keep the last known inbox when the lookup fails.
+      });
+  }, [workspaceId, userId]);
+
+  useEffect(() => {
+    refreshInbox();
+    const timer = window.setInterval(refreshInbox, 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshInbox]);
+
+  const markInboxSeen = useCallback((pageId: string) => {
+    setSeenPageIds((current) => {
+      if (current.has(pageId)) return current;
+      const next = new Set(current);
+      next.add(pageId);
+      return next;
+    });
+  }, []);
+
+  const unreadInboxCount = useMemo(
+    () => inbox.filter((item) => !seenPageIds.has(item.id)).length,
+    [inbox, seenPageIds],
+  );
+
   const lastActionRef = useRef<{ type: string; id?: string; blockId?: string; time: number } | null>(null);
 
   // Load workspace from Supabase when a workspace is selected.
@@ -372,6 +431,14 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       return;
     }
 
+    loadWorkspaceName(workspaceId)
+      .then((name) => {
+        if (name) setWorkspaceName(name);
+      })
+      .catch(() => {
+        // Keep the default workspace name when the lookup fails.
+      });
+
     loadWorkspaceFromSupabase(workspaceId)
       .then((supabaseState) => {
         if (supabaseState) {
@@ -379,11 +446,13 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
           setPast([]);
           setFuture([]);
           lastActionRef.current = null;
-          baseDispatch({ type: "reset", state: supabaseState });
+          baseDispatch({
+            type: "reset",
+            state: migrateSeedWorkspace(supabaseState, workspaceId),
+          });
         } else {
-          // Workspace exists but has no pages yet. Create an initial empty page.
-          const initialPage = createEmptyPage(null, "Untitled");
-          baseDispatch({ type: "create_page", page: initialPage });
+          // Workspace exists but has no pages yet. Seed the default Team 6 HQ tree.
+          baseDispatch({ type: "reset", state: createSeedWorkspace() });
           setPast([]);
           setFuture([]);
           lastActionRef.current = null;
@@ -560,6 +629,13 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       undo,
       redo,
       scope,
+      workspaceName,
+      memberCount,
+      inbox,
+      seenPageIds,
+      unreadInboxCount,
+      markInboxSeen,
+      refreshInbox,
       trash,
       favorites,
       toggleFavorite,
@@ -578,6 +654,13 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
       undo,
       redo,
       scope,
+      workspaceName,
+      memberCount,
+      inbox,
+      seenPageIds,
+      unreadInboxCount,
+      markInboxSeen,
+      refreshInbox,
       trash,
       favorites,
       toggleFavorite,

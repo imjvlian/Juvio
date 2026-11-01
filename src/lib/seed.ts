@@ -19,6 +19,17 @@ export function createEmptyPage(parentId: string | null, title = ""): Page {
   });
 }
 
+/** Stable icon keys for the seeded teamspace tree. Named keys render as SVG. */
+export const TEAMSPACE_CHILDREN = [
+  { title: "Tasks", icon: "check-circle" },
+  { title: "Tasks", icon: "checkbox" },
+  { title: "Projects", icon: "target" },
+  { title: "Wiki", icon: "book-open" },
+  { title: "Meetings", icon: "file-lines" },
+  { title: "Docs", icon: "file" },
+  { title: "TEAM ROLES", icon: "file" },
+] as const;
+
 export function createSeedWorkspace(): WorkspaceState {
   const welcome = page({
     title: "Welcome to Juvio",
@@ -63,64 +74,63 @@ export function createSeedWorkspace(): WorkspaceState {
 
   welcome.children = [quickStart.id];
 
-  // Team 6 HQ teamspace with 7 children
+  // Team 6 HQ teamspace with the seven seeded children.
   const team6Hq = page({
     title: "Team 6 HQ",
-    icon: "🏠",
+    icon: "home-orange",
     parentId: null,
     blocks: [block("paragraph", "Team 6 HQ workspace.")],
   });
 
-  const childTitles = [
-    { title: "Tasks", icon: "✅" },
-    { title: "Tasks", icon: "☑️" },
-    { title: "Projects", icon: "🎯" },
-    { title: "Wiki", icon: "📖" },
-    { title: "Meetings", icon: "📋" },
-    { title: "Docs", icon: "📄" },
-    { title: "TEAM ROLES", icon: "📄" },
-  ];
-
-  const teamChildren = childTitles.map((c) =>
-    page({ title: c.title, icon: c.icon, parentId: team6Hq.id, blocks: [block("paragraph")] })
+  const teamChildren = TEAMSPACE_CHILDREN.map((spec) =>
+    page({
+      title: spec.title,
+      icon: spec.icon,
+      parentId: team6Hq.id,
+      blocks: [block("paragraph")],
+    }),
   );
-  team6Hq.children = teamChildren.map((c) => c.id);
+  team6Hq.children = teamChildren.map((child) => child.id);
 
-  // Private pages
+  // Keep the legacy onboarding pages reachable from Docs instead of the root.
+  const docs = teamChildren.find((child) => child.title === "Docs");
+  if (docs) {
+    docs.children = [welcome.id, ideas.id];
+    welcome.parentId = docs.id;
+    ideas.parentId = docs.id;
+  }
+
   const gettingStarted = page({
     title: "Getting Started",
-    icon: "📄",
+    icon: "file",
     parentId: null,
     blocks: [block("paragraph", "Getting started with Juvio.")],
   });
 
   const team7 = page({
     title: "TEAM 7",
-    icon: "📄",
+    icon: "file",
     parentId: null,
     blocks: [block("paragraph", "TEAM 7 workspace.")],
   });
 
-  const allPages: Record<string, Page> = {};
-  const order: string[] = [];
-
-  function register(p: Page) {
-    allPages[p.id] = p;
-    order.push(p.id);
+  const pages: Record<string, Page> = {};
+  for (const entry of [
+    team6Hq,
+    ...teamChildren,
+    welcome,
+    quickStart,
+    ideas,
+    gettingStarted,
+    team7,
+  ]) {
+    pages[entry.id] = entry;
   }
-
-  register(welcome);
-  register(quickStart);
-  register(ideas);
-  register(team6Hq);
-  teamChildren.forEach(register);
-  register(gettingStarted);
-  register(team7);
 
   return {
     version: 1,
-    pages: allPages,
-    rootOrder: [team6Hq.id, welcome.id, ideas.id, gettingStarted.id, team7.id],
+    pages,
+    rootOrder: [team6Hq.id, gettingStarted.id, team7.id],
     activePageId: team6Hq.id,
   };
 }

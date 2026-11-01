@@ -2,7 +2,7 @@ import type { Block, Page, WorkspaceState } from "../types";
 
 export type WorkspaceAction =
   | { type: "select_page"; id: string }
-  | { type: "create_page"; page: Page; afterId?: string }
+  | { type: "create_page"; page: Page; afterId?: string; select?: boolean }
   | { type: "delete_page"; id: string }
   | { type: "restore_pages"; pages: Page[]; rootId: string }
   | { type: "duplicate_page"; id: string }

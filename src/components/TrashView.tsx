@@ -1,4 +1,5 @@
-import { PageIcon, TrashIcon } from "./icons";
+import { TrashIcon } from "./icons";
+import { PageGlyph } from "./PageGlyph";
 import { useWorkspace } from "../store/useWorkspace";
 
 function deletedLabel(timestamp: number): string {
@@ -58,7 +59,9 @@ export function TrashView() {
           <div className="trash-list">
             {trash.map((entry) => (
               <div key={entry.id} className="trash-entry">
-                <span className="trash-entry-icon">{entry.icon ?? <PageIcon />}</span>
+                <span className="trash-entry-icon">
+                  <PageGlyph icon={entry.icon} size={16} />
+                </span>
                 <span className="trash-entry-copy">
                   <span className="trash-entry-title">{entry.title}</span>
                   <small>

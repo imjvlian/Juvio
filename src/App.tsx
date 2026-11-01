@@ -3,7 +3,7 @@ import { PageEditor } from "./components/PageEditor";
 import { Sidebar } from "./components/Sidebar";
 import { TrashView } from "./components/TrashView";
 import { LibraryView } from "./components/LibraryView";
-import { SidebarIcon } from "./components/icons";
+import { PencilIcon, SidebarIcon } from "./components/icons";
 import { WorkspaceProvider } from "./store/WorkspaceContext";
 import { useWorkspace } from "./store/useWorkspace";
 import { supabase } from "./lib/supabase";
@@ -23,7 +23,7 @@ function readTheme(): Theme {
   } catch {
     // Fall back to the system preference.
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "dark";
+  return "dark";
 }
 
 function readSidebarOpen(): boolean {
@@ -44,7 +44,16 @@ function readWorkspaceId(): string | null {
   return null;
 }
 
-function Shell() {
+/** The hash is the single source of truth for the current view. */
+function readHashRoute(): string {
+  return window.location.hash.replace(/^#\/?/, "");
+}
+
+function routeHash(route: string): string {
+  return route ? `#/${route}` : "#/";
+}
+
+export function Shell() {
   const {
     state,
     dispatch,
@@ -56,114 +65,104 @@ function Shell() {
     lastTrashed,
     clearLastTrashed,
     restoreFromTrash,
+    markInboxSeen,
   } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
-  const [showTrash, setShowTrash] = useState(false);
-  const [showLibrary, setShowLibrary] = useState(false);
-  const currentRoute = showTrash ? "trash" : showLibrary ? "library" : state.activePageId ?? "";
+  const [route, setRoute] = useState<string>(() => readHashRoute() || "library");
+  const [aiOpen, setAiOpen] = useState(false);
 
-  const openTrash = useCallback(() => {
-    setShowTrash(true);
-    setShowLibrary(false);
-    window.history.replaceState(null, "", "#/trash");
+  const navigate = useCallback((next: string) => {
+    const hash = routeHash(next);
+    if (window.location.hash !== hash) window.history.replaceState(null, "", hash);
+    setRoute(next);
   }, []);
 
-  const openLibrary = useCallback(() => {
-    setShowLibrary(true);
-    setShowTrash(false);
-    window.history.replaceState(null, "", "#/library");
-  }, []);
-
+  const openTrash = useCallback(() => navigate("trash"), [navigate]);
+  const openLibrary = useCallback(() => navigate("library"), [navigate]);
   const selectPage = useCallback(
     (id: string) => {
-      setShowTrash(false);
-      setShowLibrary(false);
-      window.history.replaceState(null, "", `#/${id}`);
+      if (!id) {
+        navigate("library");
+        return;
+      }
+      navigate(id);
       dispatch({ type: "select_page", id });
     },
-    [dispatch],
+    [navigate, dispatch],
   );
 
-  // Selecting a page leaves the Trash / Library views.
-  const lastActiveRef = useRef(state.activePageId);
-  useEffect(() => {
-    if (isLoading) {
-      lastActiveRef.current = state.activePageId;
-      return;
-    }
-    if (lastActiveRef.current === state.activePageId) return;
-    lastActiveRef.current = state.activePageId;
-    setShowTrash(false);
-    setShowLibrary(false);
-    if (state.activePageId && (window.location.hash === "#/trash" || window.location.hash === "#/library")) {
-      window.history.replaceState(null, "", `#/${state.activePageId}`);
-    }
-  }, [isLoading, state.activePageId]);
-
-  // Keep the URL in sync with the active page so links can be shared or refreshed.
-  // A deep link wins over the restored selection once the workspace has loaded.
-  useEffect(() => {
-    if (isLoading) return;
-    const hashId = window.location.hash.replace(/^#\/?/, "");
-    if (hashId === "trash") {
-      setShowTrash(true);
-      setShowLibrary(false);
-      return;
-    }
-    if (hashId === "library") {
-      setShowLibrary(true);
-      setShowTrash(false);
-      return;
-    }
-    if (hashId && hashId !== state.activePageId && state.pages[hashId]) {
-      setShowTrash(false);
-      setShowLibrary(false);
-      dispatch({ type: "select_page", id: hashId });
-      return;
-    }
-    if (showTrash) return;
-    if (showLibrary) return;
-    if (!state.activePageId) {
-      // No page selected: default to Library view.
-      if (!hashId || hashId === "") {
-        window.history.replaceState(null, "", "#/library");
-        setShowLibrary(true);
-        setShowTrash(false);
-      }
-      return;
-    }
-    const next = `#/${state.activePageId}`;
-    if (window.location.hash !== next) {
-      window.history.replaceState(null, "", next);
-    }
-  }, [isLoading, state.activePageId, state.pages, dispatch, showTrash, showLibrary]);
   const pagesRef = useRef(state.pages);
   useEffect(() => {
     pagesRef.current = state.pages;
   }, [state.pages]);
+
+  // Canonicalise the URL: no hash means Library, unknown ids fall back to it too.
+  useEffect(() => {
+    if (isLoading) return;
+    const hashRoute = readHashRoute();
+    if (!hashRoute) {
+      window.history.replaceState(null, "", "#/library");
+      return;
+    }
+    if (hashRoute === "library" || hashRoute === "trash") return;
+    if (!pagesRef.current[hashRoute]) {
+      window.history.replaceState(null, "", "#/library");
+    }
+  }, [isLoading]);
+
+  // Follow hash edits (address bar, pasted links, browser navigation).
   useEffect(() => {
     function applyHash() {
-      const id = window.location.hash.replace(/^#\/?/, "");
-      if (id === "trash") {
-        setShowTrash(true);
-        setShowLibrary(false);
+      const id = readHashRoute();
+      if (!id) {
+        setRoute("library");
         return;
       }
-      if (id === "library") {
-        setShowLibrary(true);
-        setShowTrash(false);
+      if (id === "library" || id === "trash") {
+        setRoute(id);
         return;
       }
-      if (id && pagesRef.current[id]) {
-        setShowTrash(false);
-        setShowLibrary(false);
+      if (pagesRef.current[id]) {
+        setRoute(id);
         dispatch({ type: "select_page", id });
+        return;
       }
+      setRoute("library");
+      window.history.replaceState(null, "", "#/library");
     }
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
   }, [dispatch]);
+
+  // Follow page changes made inside the editor (create, duplicate, breadcrumbs, undo).
+  const previousActiveRef = useRef(state.activePageId);
+  useEffect(() => {
+    if (isLoading) {
+      previousActiveRef.current = state.activePageId;
+      return;
+    }
+    const previous = previousActiveRef.current;
+    previousActiveRef.current = state.activePageId;
+    if (state.activePageId === previous) return;
+    if (!state.activePageId) {
+      navigate("library");
+      return;
+    }
+    if (route !== state.activePageId) navigate(state.activePageId);
+  }, [isLoading, state.activePageId, route, navigate]);
+
+  // A page that no longer exists (deleted or moved to Trash) falls back to Library.
+  useEffect(() => {
+    if (route === "library" || route === "trash") return;
+    if (!state.pages[route]) navigate("library");
+  }, [route, state.pages, navigate]);
+
+  // Opening a page clears its inbox entry.
+  useEffect(() => {
+    if (route === "library" || route === "trash") return;
+    if (state.pages[route]) markInboxSeen(route);
+  }, [route, state.pages, markInboxSeen]);
 
   // Auto-dismiss the "moved to Trash" toast.
   useEffect(() => {
@@ -190,24 +189,28 @@ function Shell() {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    if (showTrash) {
+    if (route === "trash") {
       document.title = "Trash · Juvio";
       return;
     }
-    if (showLibrary) {
+    if (route === "library") {
       document.title = "Library · Juvio";
       return;
     }
-    const page = state.activePageId ? state.pages[state.activePageId] : undefined;
+    const page = state.pages[route];
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
-  }, [showTrash, showLibrary, state.activePageId, state.pages]);
+  }, [route, state.pages]);
 
-  // Global keyboard shortcuts: undo / redo.
+  // Global keyboard shortcuts: undo / redo, and Escape closes the AI panel.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && aiOpen) {
+        setAiOpen(false);
+        return;
+      }
+
       const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const mod = isMac ? event.metaKey : event.ctrlKey;
-
       if (!mod || event.altKey) return;
 
       if (event.key === "z" && !event.shiftKey) {
@@ -223,13 +226,12 @@ function Shell() {
           event.preventDefault();
           redo();
         }
-        return;
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canUndo, canRedo, undo, redo]);
+  }, [aiOpen, canUndo, canRedo, undo, redo]);
 
   const handleSignOut = useCallback(async () => {
     await supabase.auth.signOut();
@@ -245,6 +247,9 @@ function Shell() {
     );
   }
 
+  const showTrash = route === "trash";
+  const showLibrary = route === "library" || !state.pages[route];
+
   return (
     <div className={`app${sidebarOpen ? "" : " is-sidebar-collapsed"}`}>
       {sidebarOpen ? (
@@ -256,7 +261,7 @@ function Shell() {
           onOpenTrash={openTrash}
           onOpenLibrary={openLibrary}
           onSelectPage={selectPage}
-          currentRoute={currentRoute}
+          currentRoute={route}
         />
       ) : (
         <button
@@ -271,9 +276,9 @@ function Shell() {
       {showTrash ? (
         <TrashView />
       ) : showLibrary ? (
-        <LibraryView />
+        <LibraryView onSelectPage={selectPage} />
       ) : (
-        <PageEditor key={state.activePageId ?? "empty"} />
+        <PageEditor key={route} />
       )}
       {lastTrashed && (
         <div className="trash-toast" role="status">
@@ -295,11 +300,26 @@ function Shell() {
           </button>
         </div>
       )}
-      {/* Floating AI button */}
-      <button type="button" className="ai-float-btn" aria-label="Notion AI" title="Ask AI">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
+      {aiOpen && (
+        <div className="ai-panel" role="dialog" aria-label="Ask AI">
+          <div className="ai-panel-title">Ask AI</div>
+          <p className="ai-panel-text">
+            AI features are not connected yet. Ask about this page once Juvio is linked to a model.
+          </p>
+          <button type="button" className="ai-panel-close" onClick={() => setAiOpen(false)}>
+            Close
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        className="ai-float-btn"
+        aria-label="Ask AI"
+        title="Ask AI"
+        aria-expanded={aiOpen}
+        onClick={() => setAiOpen((open) => !open)}
+      >
+        <PencilIcon width={20} height={20} />
       </button>
     </div>
   );

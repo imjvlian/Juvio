@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import type { WorkspaceState } from "../types";
 import { createSeedWorkspace } from "./seed";
 import { isValidState } from "./storage";
+import type { InboxItem } from "./inbox";
 
 /**
  * Load a workspace from Supabase. Returns null when the workspace has no pages yet.
@@ -161,6 +162,52 @@ export interface WorkspaceInfo {
   name: string;
   role: "owner" | "admin" | "member";
   isOwner: boolean;
+}
+
+/** Fetch the workspace display name used by the sidebar switcher. */
+export async function loadWorkspaceName(workspaceId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("name")
+    .eq("id", workspaceId)
+    .single();
+  if (error) throw error;
+  return data?.name ?? null;
+}
+
+/** Number of members in the workspace (the Library "Members" column). */
+export async function loadWorkspaceMemberCount(workspaceId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("workspace_members")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", workspaceId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/**
+ * Inbox entries: pages other workspace members changed. No notifications table
+ * exists, so the inbox is derived from the real `pages.updated_by` history.
+ */
+export async function loadInboxItems(
+  workspaceId: string,
+  userId: string,
+): Promise<InboxItem[]> {
+  const { data, error } = await supabase
+    .from("pages")
+    .select("id, title, icon, updated_at, updated_by")
+    .eq("workspace_id", workspaceId)
+    .neq("updated_by", userId)
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data ?? []).map((page) => ({
+    id: page.id,
+    title: page.title || "Untitled",
+    icon: page.icon,
+    updatedAt: new Date(page.updated_at).getTime(),
+    updatedBy: page.updated_by,
+  }));
 }
 
 /**

@@ -8,6 +8,7 @@ import { useWorkspace } from "../store/useWorkspace";
 import { BlockMenu, type MenuAnchor, type MenuMode } from "./BlockMenu";
 import { BlockRow, type FocusRequest } from "./BlockRow";
 import { EmojiPicker } from "./EmojiPicker";
+import { PageGlyph } from "./PageGlyph";
 import { ChevronIcon, CommentIcon, MoreIcon, StarIcon } from "./icons";
 
 interface OpenMenu {
@@ -287,14 +288,14 @@ export function PageEditor() {
                   dispatch({ type: "select_page", id: crumb.id });
                 }}
               >
-                {crumb.icon ? `${crumb.icon} ` : ""}
+                {crumb.icon ? <PageGlyph icon={crumb.icon} size={14} className="crumb-icon" /> : null}
                 {crumb.title || "Untitled"}
               </button>
               <ChevronIcon className="crumb-chevron" width={12} height={12} />
             </span>
           ))}
           <span className="crumb-current">
-            {page.icon ? `${page.icon} ` : ""}
+            {page.icon ? <PageGlyph icon={page.icon} size={14} className="crumb-icon" /> : null}
             {page.title || "Untitled"}
           </span>
         </div>
@@ -344,7 +345,9 @@ export function PageEditor() {
                         className="page-menu-item page-menu-page"
                         onClick={() => handleMovePage(target.id)}
                       >
-                        <span className="page-menu-page-icon">{target.icon ?? "📄"}</span>
+                        <span className="page-menu-page-icon">
+                          <PageGlyph icon={target.icon} size={14} />
+                        </span>
                         <span className="page-menu-page-title">{target.title || "Untitled"}</span>
                       </button>
                     ))}
@@ -403,7 +406,7 @@ export function PageEditor() {
                 setPickerOpen((open) => !open);
               }}
             >
-              {page.icon}
+              <PageGlyph icon={page.icon} size={48} />
             </button>
           ) : (
             <button

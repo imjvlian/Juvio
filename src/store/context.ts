@@ -2,6 +2,7 @@ import { createContext, type Dispatch } from "react";
 import type { WorkspaceAction } from "./actions";
 import type { WorkspaceState } from "../types";
 import type { TrashEntry } from "../lib/trash";
+import type { InboxItem } from "../lib/inbox";
 
 export interface WorkspaceContextValue {
   state: WorkspaceState;
@@ -13,6 +14,17 @@ export interface WorkspaceContextValue {
   redo: () => void;
   /** Local storage namespace for UI-only state (favorites, trash). */
   scope: string;
+  /** Display name of the workspace (shown in the sidebar switcher). */
+  workspaceName: string;
+  /** Number of workspace members (Library "Members" column). */
+  memberCount: number;
+  /** Pages other members changed — the sidebar inbox. */
+  inbox: InboxItem[];
+  /** Page ids the user already opened (used for unread state). */
+  seenPageIds: ReadonlySet<string>;
+  unreadInboxCount: number;
+  markInboxSeen: (pageId: string) => void;
+  refreshInbox: () => void;
   trash: TrashEntry[];
   favorites: string[];
   toggleFavorite: (id: string) => void;
