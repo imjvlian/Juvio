@@ -56,6 +56,7 @@ export function PageEditor() {
   const [dropPosition, setDropPosition] = useState<"before" | "after">("before");
   const [templateModal, setTemplateModal] = useState<"save" | "pick" | null>(null);
   const [templateName, setTemplateName] = useState("");
+  const [pageMenu, setPageMenu] = useState(false);
 
   const breadcrumbs = useMemo(
     () => (page ? ancestorsOf(page, state.pages) : []),
@@ -238,12 +239,6 @@ export function PageEditor() {
     setDropPosition(position);
   }
 
-  function handleSaveTemplate() {
-    if (!page) return;
-    setTemplateName(page.title || "Untitled");
-    setTemplateModal("save");
-  }
-
   function handleConfirmSaveTemplate() {
     if (!page || !templateName.trim()) return;
     dispatch({ type: "save_template", pageId: page.id, name: templateName.trim() });
@@ -328,19 +323,27 @@ export function PageEditor() {
           <button
             type="button"
             className="page-action-btn"
-            onClick={handleSaveTemplate}
-            title="Save as template"
+            onClick={() => setPageMenu((open) => !open)}
+            title="More actions"
           >
-            📋
+            ⋮
           </button>
-          <button
-            type="button"
-            className="page-action-btn"
-            onClick={() => setTemplateModal("pick")}
-            title="New from template"
-          >
-            📄
-          </button>
+          {pageMenu && (
+            <div className="page-menu">
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal("save"); }}>
+                Save as template
+              </button>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal("pick"); }}>
+                New from template
+              </button>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>
+                Duplicate page
+              </button>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
+                Delete page
+              </button>
+            </div>
+          )}
         </div>
 
         <textarea

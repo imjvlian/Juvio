@@ -1491,6 +1491,35 @@ textarea:focus-visible {
   color: var(--text-strong);
 }
 
+.page-menu {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  z-index: 60;
+}
+
+.page-menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page-menu-item:hover {
+  background: var(--hover);
+  color: var(--text-strong);
+}
+
 /* ------------------------------------------------------------- drag reorder */
 
 .block-drag-handle {
