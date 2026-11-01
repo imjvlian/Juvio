@@ -101,6 +101,21 @@ export async function saveWorkspaceToSupabase(
   const { error: pagesError } = await supabase.from("pages").upsert(pageRows, { onConflict: "id" });
   if (pagesError) throw pagesError;
 
+  // Delete pages no longer in state (and their blocks, due to FK constraint).
+  const { data: existingPages, error: existingPagesError } = await supabase
+    .from("pages")
+    .select("id")
+    .eq("workspace_id", workspaceId);
+  if (existingPagesError) throw existingPagesError;
+
+  const currentPageIds = Object.keys(state.pages);
+  const existingPageIds = new Set((existingPages ?? []).map((p) => p.id));
+  const toDeletePages = [...existingPageIds].filter((id) => !currentPageIds.includes(id));
+  if (toDeletePages.length > 0) {
+    await supabase.from("blocks").delete().in("page_id", toDeletePages);
+    await supabase.from("pages").delete().in("id", toDeletePages);
+  }
+
   const blockRows: any[] = [];
   for (const page of Object.values(state.pages)) {
     page.blocks.forEach((block, index) => {
@@ -122,6 +137,22 @@ export async function saveWorkspaceToSupabase(
   if (blockRows.length > 0) {
     const { error: blocksError } = await supabase.from("blocks").upsert(blockRows, { onConflict: "id" });
     if (blocksError) throw blocksError;
+  }
+
+  // Delete blocks no longer in state.
+  const currentPageIdSet = new Set(Object.keys(state.pages));
+  const currentBlockIds = new Set(blockRows.map((b) => b.id));
+  const { data: existingBlocks, error: existingBlocksError } = await supabase
+    .from("blocks")
+    .select("id, page_id")
+    .in("page_id", [...currentPageIdSet]);
+  if (existingBlocksError) throw existingBlocksError;
+
+  const toDeleteBlocks = (existingBlocks ?? [])
+    .filter((b) => !currentBlockIds.has(b.id))
+    .map((b) => b.id);
+  if (toDeleteBlocks.length > 0) {
+    await supabase.from("blocks").delete().in("id", toDeleteBlocks);
   }
 }
 

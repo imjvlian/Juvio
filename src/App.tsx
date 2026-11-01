@@ -10,6 +10,7 @@ import { WorkspaceList } from "./components/auth/WorkspaceList";
 
 const THEME_KEY = "juvio.theme.v1";
 const SIDEBAR_KEY = "juvio.sidebar.open.v1";
+const WORKSPACE_ID_KEY = "juvio.workspace.id.v1";
 
 type Theme = "light" | "dark";
 
@@ -29,6 +30,16 @@ function readSidebarOpen(): boolean {
   } catch {
     return true;
   }
+}
+
+function readWorkspaceId(): string | null {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_ID_KEY);
+    if (stored && stored !== "null") return stored;
+  } catch {
+    // Fall back to no workspace.
+  }
+  return null;
 }
 
 function Shell() {
@@ -134,7 +145,7 @@ type AppView = "login" | "workspaces" | "editor";
 export default function App() {
   const [view, setView] = useState<AppView>("login");
   const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(readWorkspaceId());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -161,6 +172,11 @@ export default function App() {
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setWorkspaceId(null);
+        try {
+          localStorage.removeItem(WORKSPACE_ID_KEY);
+        } catch {
+          // Ignore storage errors.
+        }
         setView("login");
       }
     });
@@ -195,6 +211,11 @@ export default function App() {
         userId={user.id}
         onSelectWorkspace={(id) => {
           setWorkspaceId(id);
+          try {
+            localStorage.setItem(WORKSPACE_ID_KEY, id);
+          } catch {
+            // Workspace persistence is optional.
+          }
           setView("editor");
         }}
       />
