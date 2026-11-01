@@ -231,6 +231,35 @@ export function Sidebar({ theme, onToggleTheme, onCollapse }: SidebarProps) {
         )}
       </nav>
 
+      <div className="sidebar-section">
+        <span className="sidebar-section-label">Templates</span>
+        <div className="template-list">
+          {Object.entries(state.templates ?? {}).map(([id, t]) => (
+            <button
+              key={id}
+              type="button"
+              className="template-item"
+              onClick={() => dispatch({ type: "create_page_from_template", templateId: id, parentId: null })}
+            >
+              <span className="template-item-title">{t.name}</span>
+              <button
+                type="button"
+                className="template-item-delete"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  dispatch({ type: "delete_template", id });
+                }}
+              >
+                ×
+              </button>
+            </button>
+          ))}
+          {Object.keys(state.templates ?? {}).length === 0 && (
+            <p className="template-empty">No templates yet.</p>
+          )}
+        </div>
+      </div>
+
       <div className="sidebar-footer">
         <button type="button" className="footer-button" onClick={onToggleTheme}>
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}

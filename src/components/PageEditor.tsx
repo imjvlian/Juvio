@@ -54,8 +54,6 @@ export function PageEditor() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<"before" | "after">("before");
-  const [templateModal, setTemplateModal] = useState<"save" | "pick" | null>(null);
-  const [templateName, setTemplateName] = useState("");
   const [pageMenu, setPageMenu] = useState(false);
 
   const breadcrumbs = useMemo(
@@ -239,22 +237,6 @@ export function PageEditor() {
     setDropPosition(position);
   }
 
-  function handleConfirmSaveTemplate() {
-    if (!page || !templateName.trim()) return;
-    dispatch({ type: "save_template", pageId: page.id, name: templateName.trim() });
-    setTemplateModal(null);
-    setTemplateName("");
-  }
-
-  function handleCreateFromTemplate(templateId: string) {
-    dispatch({ type: "create_page_from_template", templateId, parentId: page?.parentId ?? null });
-    setTemplateModal(null);
-  }
-
-  function handleDeleteTemplate(id: string) {
-    dispatch({ type: "delete_template", id });
-  }
-
   return (
     <main className="page-scroll">
       <div className="page">
@@ -336,7 +318,7 @@ export function PageEditor() {
               <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
                 Delete
               </button>
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal(null); }}>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
                 Move
               </button>
               <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
@@ -417,57 +399,6 @@ export function PageEditor() {
         />
       )}
 
-      {templateModal === "save" && (
-        <div className="template-modal">
-          <div className="template-modal-content">
-            <h3>Save as template</h3>
-            <input
-              type="text"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              placeholder="Template name"
-              autoFocus
-            />
-            <div className="template-modal-actions">
-              <button type="button" className="template-btn-cancel" onClick={() => setTemplateModal(null)}>
-                Cancel
-              </button>
-              <button type="button" className="template-btn-save" onClick={handleConfirmSaveTemplate}>
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {templateModal === "pick" && (
-        <div className="template-modal">
-          <div className="template-modal-content">
-            <h3>New from template</h3>
-            <div className="template-list">
-              {Object.entries(state.templates ?? {}).map(([id, t]) => (
-                <div key={id} className="template-item">
-                  <span>{t.name}</span>
-                  <div className="template-item-actions">
-                    <button type="button" className="template-btn-use" onClick={() => handleCreateFromTemplate(id)}>
-                      Use
-                    </button>
-                    <button type="button" className="template-btn-delete" onClick={() => handleDeleteTemplate(id)}>
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {Object.keys(state.templates ?? {}).length === 0 && <p className="template-empty">No templates yet.</p>}
-            </div>
-            <div className="template-modal-actions">
-              <button type="button" className="template-btn-cancel" onClick={() => setTemplateModal(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
