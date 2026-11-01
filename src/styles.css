@@ -482,6 +482,10 @@ textarea:focus-visible {
   color: var(--text-strong);
 }
 
+.is-sidebar-collapsed .page-topbar {
+  padding-left: 56px;
+}
+
 /* ------------------------------------------------------------------- page */
 
 .page-scroll {
@@ -509,11 +513,11 @@ textarea:focus-visible {
 
 .page {
   width: 100%;
-  max-width: 780px;
+  max-width: 900px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 24px 60px 48px;
+  padding: 24px 96px 48px;
   flex: 1 0 auto;
 }
 
@@ -1071,7 +1075,7 @@ textarea:focus-visible {
 
 @media (max-width: 860px) {
   .page {
-    padding: 54px 40px 32px;
+    padding: 16px 40px 32px;
   }
 
   .block-controls {
@@ -1094,7 +1098,7 @@ textarea:focus-visible {
   }
 
   .page {
-    padding: 56px 24px 24px;
+    padding: 12px 24px 24px;
   }
 
   .page-title {
