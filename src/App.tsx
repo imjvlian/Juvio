@@ -119,6 +119,7 @@ function Shell() {
           theme={theme}
           onToggleTheme={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
           onCollapse={() => setSidebarOpen(false)}
+          onSignOut={handleSignOut}
         />
       ) : (
         <button
@@ -131,11 +132,6 @@ function Shell() {
         </button>
       )}
       <PageEditor key={state.activePageId ?? "empty"} />
-      <div className="auth-signout" aria-hidden="true">
-        <button type="button" className="ghost-signout" onClick={handleSignOut} title="Sign out">
-          ⟳
-        </button>
-      </div>
     </div>
   );
 }

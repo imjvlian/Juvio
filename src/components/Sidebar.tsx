@@ -5,6 +5,7 @@ import { resetWorkspace } from "../lib/storage";
 import { useWorkspace } from "../store/useWorkspace";
 import {
   ChevronIcon,
+  LogOutIcon,
   MoonIcon,
   PageIcon,
   PlusIcon,
@@ -50,9 +51,10 @@ interface SidebarProps {
   theme: "light" | "dark";
   onToggleTheme: () => void;
   onCollapse: () => void;
+  onSignOut: () => void;
 }
 
-export function Sidebar({ theme, onToggleTheme, onCollapse }: SidebarProps) {
+export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: SidebarProps) {
   const { state, dispatch } = useWorkspace();
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => {
@@ -143,36 +145,34 @@ export function Sidebar({ theme, onToggleTheme, onCollapse }: SidebarProps) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="brand">
+      <div className="sidebar-workspace">
+        <button type="button" className="workspace-switch">
           <span className="brand-mark">J</span>
-          <span className="brand-text">
-            <strong>Juvio</strong>
-            <span>Local workspace</span>
-          </span>
-        </div>
+          <span className="workspace-name">Juvio</span>
+          <ChevronIcon className="workspace-chevron" width={12} height={12} />
+        </button>
         <button type="button" className="ghost-icon" aria-label="Collapse sidebar" onClick={onCollapse}>
           <SidebarIcon />
         </button>
       </div>
+
+      <label className="sidebar-search">
+        <SearchIcon width={16} height={16} />
+        <input
+          value={query}
+          placeholder="Search"
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search pages"
+        />
+      </label>
 
       <button type="button" className="new-page-button" onClick={() => createPage(null)}>
         <PlusIcon />
         New page
       </button>
 
-      <label className="sidebar-search">
-        <SearchIcon />
-        <input
-          value={query}
-          placeholder="Search pages…"
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search pages"
-        />
-      </label>
-
       <div className="sidebar-section">
-        <span className="sidebar-section-label">Pages</span>
+        <span className="sidebar-section-label">Private</span>
         <button
           type="button"
           className="ghost-icon"
@@ -231,28 +231,28 @@ export function Sidebar({ theme, onToggleTheme, onCollapse }: SidebarProps) {
         )}
       </nav>
 
-      <div className="sidebar-section">
+      <div className="sidebar-section sidebar-section-stack">
         <span className="sidebar-section-label">Templates</span>
         <div className="template-list">
           {Object.entries(state.templates ?? {}).map(([id, t]) => (
-            <button
-              key={id}
-              type="button"
-              className="template-item"
-              onClick={() => dispatch({ type: "create_page_from_template", templateId: id, parentId: null })}
-            >
-              <span className="template-item-title">{t.name}</span>
+            <div key={id} className="template-item">
+              <button
+                type="button"
+                className="template-item-main"
+                onClick={() => dispatch({ type: "create_page_from_template", templateId: id, parentId: null })}
+              >
+                <PageIcon width={14} height={14} />
+                <span className="template-item-title">{t.name}</span>
+              </button>
               <button
                 type="button"
                 className="template-item-delete"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  dispatch({ type: "delete_template", id });
-                }}
+                aria-label={`Delete template ${t.name}`}
+                onClick={() => dispatch({ type: "delete_template", id })}
               >
                 ×
               </button>
-            </button>
+            </div>
           ))}
           {Object.keys(state.templates ?? {}).length === 0 && (
             <p className="template-empty">No templates yet.</p>
@@ -264,6 +264,9 @@ export function Sidebar({ theme, onToggleTheme, onCollapse }: SidebarProps) {
         <button type="button" className="footer-button" onClick={onToggleTheme}>
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           {theme === "dark" ? "Light mode" : "Dark mode"}
+        </button>
+        <button type="button" className="ghost-icon" aria-label="Sign out" title="Sign out" onClick={onSignOut}>
+          <LogOutIcon />
         </button>
         <button type="button" className="ghost-icon" aria-label="Reset workspace" onClick={handleReset}>
           <TrashIcon />

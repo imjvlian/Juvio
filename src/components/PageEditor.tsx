@@ -7,7 +7,7 @@ import { useWorkspace } from "../store/useWorkspace";
 import { BlockMenu, type MenuAnchor, type MenuMode } from "./BlockMenu";
 import { BlockRow, type FocusRequest } from "./BlockRow";
 import { EmojiPicker } from "./EmojiPicker";
-import { ChevronIcon } from "./icons";
+import { ChevronIcon, CommentIcon, MoreIcon, StarIcon } from "./icons";
 
 interface OpenMenu {
   blockId: string;
@@ -239,7 +239,7 @@ export function PageEditor() {
 
   return (
     <main className="page-scroll">
-      <div className="page">
+      <div className="page-topbar">
         <div className="page-breadcrumbs">
           {breadcrumbs.map((crumb) => (
             <span key={crumb.id} className="crumb">
@@ -263,6 +263,47 @@ export function PageEditor() {
           </span>
         </div>
 
+        <div className="page-actions">
+          <button type="button" className="page-share-btn" title="Share">
+            Share
+          </button>
+          <button type="button" className="page-action-btn" title="Comments" aria-label="Comments">
+            <CommentIcon width={17} height={17} />
+          </button>
+          <button type="button" className="page-action-btn" title="Add to favorites" aria-label="Add to favorites">
+            <StarIcon width={17} height={17} />
+          </button>
+          <div className="page-menu-wrap">
+            <button
+              type="button"
+              className="page-action-btn"
+              onClick={() => setPageMenu((open) => !open)}
+              title="More actions"
+              aria-label="More actions"
+            >
+              <MoreIcon width={17} height={17} />
+            </button>
+            {pageMenu && (
+              <div className="page-menu">
+                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>
+                  Duplicate
+                </button>
+                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
+                  Delete
+                </button>
+                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
+                  Move
+                </button>
+                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
+                  Export
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="page">
         <div className="page-icon-wrap">
           {page.icon ? (
             <button
@@ -298,36 +339,6 @@ export function PageEditor() {
               }}
               onClose={() => setPickerOpen(false)}
             />
-          )}
-        </div>
-
-        <div className="page-actions">
-          <button
-            type="button"
-            className="page-action-btn"
-            onClick={() => setPageMenu((open) => !open)}
-            title="More actions"
-          >
-            ⋮
-          </button>
-          <button type="button" className="page-action-btn page-share-btn" title="Share">
-            Share
-          </button>
-          {pageMenu && (
-            <div className="page-menu">
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>
-                Duplicate
-              </button>
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
-                Delete
-              </button>
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
-                Move
-              </button>
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
-                Export
-              </button>
-            </div>
           )}
         </div>
 
@@ -386,11 +397,6 @@ export function PageEditor() {
         </div>
 
         <div className="page-tail" onClick={handleTailClick} role="presentation" />
-
-        <footer className="page-footer">
-          <span className="page-footer-dot" aria-hidden="true" />
-          Saved locally · {blocks.length} block{blocks.length === 1 ? "" : "s"}
-        </footer>
       </div>
 
       {menu && (
