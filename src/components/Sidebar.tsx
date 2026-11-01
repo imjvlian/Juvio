@@ -5,6 +5,16 @@ import { resetWorkspace } from "../lib/storage";
 import { useWorkspace } from "../store/useWorkspace";
 import {
   ChevronIcon,
+  ChatIcon,
+  GridIcon,
+  HelpIcon,
+  HomeIcon,
+  CalendarIcon,
+  CustomizeIcon,
+  UserIcon,
+  HouseIcon,
+  GettingStartedIcon,
+  TeamIcon,
   LogOutIcon,
   MoonIcon,
   PageIcon,
@@ -37,22 +47,13 @@ function saveExpanded(ids: Set<string>): void {
   }
 }
 
-function pathOf(page: Page, pages: Record<string, Page>): string {
-  const names: string[] = [];
-  let current: Page | undefined = page.parentId ? pages[page.parentId] : undefined;
-  while (current) {
-    names.unshift(current.title || "Untitled");
-    current = current.parentId ? pages[current.parentId] : undefined;
-  }
-  return names.join(" / ");
-}
-
 interface SidebarProps {
   theme: "light" | "dark";
   onToggleTheme: () => void;
   onCollapse: () => void;
   onSignOut: () => void;
   onOpenTrash: () => void;
+  onOpenLibrary: () => void;
   onSelectPage: (id: string) => void;
 }
 
@@ -62,9 +63,10 @@ export function Sidebar({
   onCollapse,
   onSignOut,
   onOpenTrash,
+  onOpenLibrary,
   onSelectPage,
 }: SidebarProps) {
-  const { state, dispatch, favorites, trash, moveToTrash } = useWorkspace();
+  const { state, dispatch, favorites, trash } = useWorkspace();
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = loadExpanded();
@@ -77,6 +79,7 @@ export function Sidebar({
   });
   // Pages the user explicitly collapsed, so ancestors of the active page can stay closed.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [popupOpen, setPopupOpen] = useState(false);
 
   useEffect(() => {
     saveExpanded(expanded);
@@ -103,6 +106,12 @@ export function Sidebar({
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [query, state.pages]);
 
+  const rootPages = useMemo(() => {
+    return state.rootOrder.map((id) => state.pages[id]).filter((page): page is Page => Boolean(page));
+  }, [state.rootOrder, state.pages]);
+
+  const teamspaces = rootPages.filter((page) => page.children.length > 0);
+
   function setOpen(id: string, open: boolean) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -118,17 +127,9 @@ export function Sidebar({
     });
   }
 
-  function toggle(id: string) {
-    setOpen(id, !visibleExpanded.has(id));
-  }
-
   function createPage(parentId: string | null) {
     if (parentId) setOpen(parentId, true);
     dispatch({ type: "create_page", page: createEmptyPage(parentId) });
-  }
-
-  function deletePage(page: Page) {
-    moveToTrash(page.id);
   }
 
   const favoritePages = useMemo(
@@ -153,32 +154,176 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-workspace">
-        <button type="button" className="workspace-switch">
-          <span className="brand-mark">J</span>
-          <span className="workspace-name">Juvio</span>
-          <ChevronIcon className="workspace-chevron" width={12} height={12} />
+      {/* Top bar: toggle, inbox badge, compose */}
+      <div className="sidebar-top">
+        <button type="button" className="sidebar-toggle" aria-label="Collapse sidebar" onClick={onCollapse}>
+          <SidebarIcon width={16} height={16} />
         </button>
-        <button type="button" className="ghost-icon" aria-label="Collapse sidebar" onClick={onCollapse}>
-          <SidebarIcon />
+        <button type="button" className="inbox-btn" aria-label="Inbox">
+          <ChatIcon width={16} height={16} />
+          <span className="inbox-badge">4</span>
+        </button>
+        <button type="button" className="compose-btn" aria-label="New page" onClick={() => createPage(null)}>
+          <PlusIcon width={16} height={16} />
         </button>
       </div>
 
+      {/* Search */}
       <label className="sidebar-search">
         <SearchIcon width={16} height={16} />
         <input
           value={query}
-          placeholder="Search"
+          placeholder="Search or ask"
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Search pages"
         />
+        <span className="shortcut">Ctrl+K</span>
       </label>
 
-      <button type="button" className="new-page-button" onClick={() => createPage(null)}>
-        <PlusIcon />
-        New page
+      {/* Quick navigation */}
+      <div className="sidebar-quick">
+        <button type="button" className="nav-item is-active" aria-label="Home">
+          <HomeIcon width={16} height={16} />
+          <span>Home</span>
+        </button>
+        <button type="button" className="nav-item icon-only" aria-label="Chat">
+          <ChatIcon width={16} height={16} />
+        </button>
+        <button type="button" className="nav-item icon-only" aria-label="Calendar">
+          <CalendarIcon width={16} height={16} />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className="nav-item"
+        onClick={() => {
+          setPopupOpen(false);
+        }}
+      >
+        <ChatIcon width={16} height={16} />
+        <span>New chat</span>
+      </button>
+      <button
+        type="button"
+        className="nav-item is-active"
+        onClick={() => {
+          onOpenLibrary();
+        }}
+      >
+        <PageIcon width={16} height={16} />
+        <span>Library</span>
       </button>
 
+      {/* Upcoming events */}
+      <div className="sidebar-section">
+        <span className="sidebar-section-label">Upcoming events</span>
+        <button
+          type="button"
+          className="calendar-link"
+          onClick={() => setPopupOpen(false)}
+        >
+          <CalendarIcon width={14} height={14} />
+          <span>Connect your calendar</span>
+        </button>
+      </div>
+
+      {/* Teamspaces / search results */}
+      {query.trim() ? (
+        <>
+          <div className="sidebar-section">
+            <span className="sidebar-section-label">Results</span>
+            {filtered.length === 0 ? (
+              <p className="tree-empty">No pages match “{query.trim()}”.</p>
+            ) : (
+              filtered.map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  className="page-item"
+                  onClick={() => {
+                    onSelectPage(page.id);
+                    setPopupOpen(false);
+                  }}
+                >
+                  <PageIcon width={14} height={14} />
+                  <span>{page.title || "Untitled"}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="sidebar-section">
+            <span className="sidebar-section-label">Teamspaces</span>
+            {teamspaces.map((teamspace) => (
+              <div key={teamspace.id} className="teamspace-group">
+                <button
+                  type="button"
+                  className="teamspace-item"
+                  onClick={() => {
+                    onSelectPage(teamspace.id);
+                    setPopupOpen(false);
+                  }}
+                >
+                  <HouseIcon width={16} height={16} style={{ color: "#d97706" }} />
+                  <span>{teamspace.title || "Untitled"}</span>
+                </button>
+                {visibleExpanded.has(teamspace.id) &&
+                  teamspace.children.map((childId) => {
+                    const child = state.pages[childId];
+                    if (!child) return null;
+                    return (
+                      <button
+                        key={childId}
+                        type="button"
+                        className={`page-item${child.id === state.activePageId ? " is-active" : ""}`}
+                        onClick={() => {
+                          onSelectPage(child.id);
+                          setPopupOpen(false);
+                        }}
+                      >
+                        <PageIcon width={14} height={14} />
+                        <span>{child.title || "Untitled"}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            ))}
+            {teamspaces.length === 0 && <p className="tree-empty">No teamspaces yet.</p>}
+          </div>
+
+          <div className="sidebar-section">
+            <span className="sidebar-section-label">Private</span>
+            <button
+              type="button"
+              className="page-item"
+              onClick={() => {
+                setPopupOpen(false);
+              }}
+            >
+              <GettingStartedIcon width={14} height={14} />
+              <span>Getting Started</span>
+            </button>
+            <button
+              type="button"
+              className="page-item"
+              onClick={() => {
+                setPopupOpen(false);
+              }}
+            >
+              <TeamIcon width={14} height={14} />
+              <span>TEAM 7</span>
+            </button>
+            <button type="button" className="page-item add-new" onClick={() => createPage(null)}>
+              <span aria-hidden="true">+</span> Add new
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Favorites */}
       {favoritePages.length > 0 && (
         <div className="sidebar-section sidebar-section-stack">
           <span className="sidebar-section-label">Favorites</span>
@@ -188,7 +333,10 @@ export function Sidebar({
                 key={page.id}
                 type="button"
                 className={`favorite-item${page.id === state.activePageId ? " is-active" : ""}`}
-                onClick={() => onSelectPage(page.id)}
+                onClick={() => {
+                  onSelectPage(page.id);
+                  setPopupOpen(false);
+                }}
               >
                 <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
                 <span className="tree-title">{page.title || "Untitled"}</span>
@@ -198,66 +346,7 @@ export function Sidebar({
         </div>
       )}
 
-      <div className="sidebar-section">
-        <span className="sidebar-section-label">Private</span>
-        <button
-          type="button"
-          className="ghost-icon"
-          aria-label="New page"
-          onClick={() => createPage(null)}
-        >
-          <PlusIcon />
-        </button>
-      </div>
-
-      <nav className="page-tree" aria-label="Pages">
-        {query.trim() ? (
-          filtered.length === 0 ? (
-            <p className="tree-empty">No pages match “{query.trim()}”.</p>
-          ) : (
-            filtered.map((page) => {
-              const parentPath = pathOf(page, state.pages);
-              return (
-                <button
-                  key={page.id}
-                  type="button"
-                  className={`search-result${page.id === state.activePageId ? " is-active" : ""}`}
-                  onClick={() => onSelectPage(page.id)}
-                >
-                  <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
-                  <span className="search-result-copy">
-                    <span>{page.title || "Untitled"}</span>
-                    {parentPath && <small>{parentPath}</small>}
-                  </span>
-                </button>
-              );
-            })
-          )
-        ) : (
-          <>
-            {state.rootOrder.map((id) => {
-              const page = state.pages[id];
-              if (!page) return null;
-              return (
-                <TreeItem
-                  key={id}
-                  page={page}
-                  depth={0}
-                  pages={state.pages}
-                  activeId={state.activePageId}
-                  expanded={visibleExpanded}
-                  onToggle={toggle}
-                  onSelect={onSelectPage}
-                  onCreateChild={(pageId) => createPage(pageId)}
-                  onDelete={deletePage}
-                />
-              );
-            })}
-            {state.rootOrder.length === 0 && <p className="tree-empty">No pages yet.</p>}
-          </>
-        )}
-      </nav>
-
+      {/* Templates */}
       <div className="sidebar-section sidebar-section-stack">
         <span className="sidebar-section-label">Templates</span>
         <div className="template-list">
@@ -266,7 +355,10 @@ export function Sidebar({
               <button
                 type="button"
                 className="template-item-main"
-                onClick={() => dispatch({ type: "create_page_from_template", templateId: id, parentId: null })}
+                onClick={() => {
+                  dispatch({ type: "create_page_from_template", templateId: id, parentId: null });
+                  setPopupOpen(false);
+                }}
               >
                 <PageIcon width={14} height={14} />
                 <span className="template-item-title">{t.name}</span>
@@ -288,8 +380,27 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-footer">
+        <button
+          type="button"
+          className="footer-row"
+          onClick={() => setPopupOpen(true)}
+        >
+          <CustomizeIcon width={16} height={16} />
+          <span>Customize sidebar</span>
+        </button>
+        <div className="footer-switcher">
+          <UserIcon width={16} height={16} />
+          <span>Team 6</span>
+          <ChevronIcon width={10} height={10} />
+        </div>
+        <button type="button" className="footer-icon" aria-label="Help">
+          <HelpIcon width={16} height={16} />
+        </button>
+        <button type="button" className="footer-icon grid-btn" onClick={() => setPopupOpen(true)}>
+          <GridIcon width={16} height={16} />
+        </button>
         <button type="button" className="footer-row" onClick={onOpenTrash}>
-          <TrashIcon />
+          <TrashIcon width={16} height={16} />
           <span>Trash</span>
           {trash.length > 0 && <span className="footer-count">{trash.length}</span>}
         </button>
@@ -298,7 +409,7 @@ export function Sidebar({
           <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
         </button>
         <button type="button" className="footer-row" onClick={onSignOut}>
-          <LogOutIcon />
+          <LogOutIcon width={16} height={16} />
           <span>Log out</span>
         </button>
         <button
@@ -311,102 +422,20 @@ export function Sidebar({
           <span>Reset workspace</span>
         </button>
       </div>
+
+      {/* Popup menu (app launcher) */}
+      {popupOpen && (
+        <div className="popup-backdrop" onClick={() => setPopupOpen(false)}>
+          <div className="popup" onClick={(event) => event.stopPropagation()}>
+            <div className="popup-item">Library</div>
+            <div className="popup-item">AI Meeting Notes</div>
+            <div className="popup-item">Skills</div>
+            <div className="popup-item">My Tasks</div>
+            <div className="popup-item popup-hover">Marketplace</div>
+            <div className="popup-item">Trash</div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
-
-interface TreeItemProps {
-  page: Page;
-  depth: number;
-  pages: Record<string, Page>;
-  activeId: string | null;
-  expanded: Set<string>;
-  onToggle: (id: string) => void;
-  onSelect: (id: string) => void;
-  onCreateChild: (id: string) => void;
-  onDelete: (page: Page) => void;
-}
-
-function TreeItem({
-  page,
-  depth,
-  pages,
-  activeId,
-  expanded,
-  onToggle,
-  onSelect,
-  onCreateChild,
-  onDelete,
-}: TreeItemProps) {
-  const hasChildren = page.children.length > 0;
-  const isOpen = expanded.has(page.id);
-  const isActive = page.id === activeId;
-
-  return (
-    <div className="tree-branch">
-      <div
-        className={`tree-row${isActive ? " is-active" : ""}`}
-        style={{ paddingLeft: `${6 + depth * 14}px` }}
-      >
-        <button
-          type="button"
-          className={`tree-arrow${hasChildren ? "" : " is-hidden"}${isOpen ? " is-open" : ""}`}
-          aria-label={isOpen ? "Collapse page" : "Expand page"}
-          tabIndex={hasChildren ? 0 : -1}
-          onClick={() => hasChildren && onToggle(page.id)}
-        >
-          <ChevronIcon width={12} height={12} />
-        </button>
-        <button
-          type="button"
-          className="tree-main"
-          onClick={() => onSelect(page.id)}
-          title={page.title || "Untitled"}
-        >
-          <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
-          <span className="tree-title">{page.title || "Untitled"}</span>
-        </button>
-        <span className="tree-actions">
-          <button
-            type="button"
-            className="tree-action"
-            aria-label="Add sub-page"
-            title="Add sub-page"
-            onClick={() => onCreateChild(page.id)}
-          >
-            <PlusIcon width={14} height={14} />
-          </button>
-          <button
-            type="button"
-            className="tree-action"
-            aria-label="Delete page"
-            title="Delete page"
-            onClick={() => onDelete(page)}
-          >
-            <TrashIcon width={14} height={14} />
-          </button>
-        </span>
-      </div>
-      {isOpen &&
-        page.children.map((childId) => {
-          const child = pages[childId];
-          if (!child) return null;
-          return (
-            <TreeItem
-              key={childId}
-              page={child}
-              depth={depth + 1}
-              pages={pages}
-              activeId={activeId}
-              expanded={expanded}
-              onToggle={onToggle}
-              onSelect={onSelect}
-              onCreateChild={onCreateChild}
-              onDelete={onDelete}
-            />
-          );
-        })}
-    </div>
-  );
-}
-

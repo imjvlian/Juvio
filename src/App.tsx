@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PageEditor } from "./components/PageEditor";
 import { Sidebar } from "./components/Sidebar";
 import { TrashView } from "./components/TrashView";
+import { LibraryView } from "./components/LibraryView";
 import { SidebarIcon } from "./components/icons";
 import { WorkspaceProvider } from "./store/WorkspaceContext";
 import { useWorkspace } from "./store/useWorkspace";
@@ -59,22 +60,31 @@ function Shell() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
   const [showTrash, setShowTrash] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   const openTrash = useCallback(() => {
     setShowTrash(true);
+    setShowLibrary(false);
     window.history.replaceState(null, "", "#/trash");
+  }, []);
+
+  const openLibrary = useCallback(() => {
+    setShowLibrary(true);
+    setShowTrash(false);
+    window.history.replaceState(null, "", "#/library");
   }, []);
 
   const selectPage = useCallback(
     (id: string) => {
       setShowTrash(false);
+      setShowLibrary(false);
       window.history.replaceState(null, "", `#/${id}`);
       dispatch({ type: "select_page", id });
     },
     [dispatch],
   );
 
-  // Selecting a page leaves the Trash view.
+  // Selecting a page leaves the Trash / Library views.
   const lastActiveRef = useRef(state.activePageId);
   useEffect(() => {
     if (isLoading) {
@@ -84,7 +94,8 @@ function Shell() {
     if (lastActiveRef.current === state.activePageId) return;
     lastActiveRef.current = state.activePageId;
     setShowTrash(false);
-    if (state.activePageId && window.location.hash === "#/trash") {
+    setShowLibrary(false);
+    if (state.activePageId && (window.location.hash === "#/trash" || window.location.hash === "#/library")) {
       window.history.replaceState(null, "", `#/${state.activePageId}`);
     }
   }, [isLoading, state.activePageId]);
@@ -96,19 +107,26 @@ function Shell() {
     const hashId = window.location.hash.replace(/^#\/?/, "");
     if (hashId === "trash") {
       setShowTrash(true);
+      setShowLibrary(false);
+      return;
+    }
+    if (hashId === "library") {
+      setShowLibrary(true);
+      setShowTrash(false);
       return;
     }
     if (hashId && hashId !== state.activePageId && state.pages[hashId]) {
       setShowTrash(false);
+      setShowLibrary(false);
       dispatch({ type: "select_page", id: hashId });
       return;
     }
-    if (showTrash || !state.activePageId) return;
+    if ((showTrash || showLibrary) || !state.activePageId) return;
     const next = `#/${state.activePageId}`;
     if (window.location.hash !== next) {
       window.history.replaceState(null, "", next);
     }
-  }, [isLoading, state.activePageId, state.pages, dispatch, showTrash]);
+  }, [isLoading, state.activePageId, state.pages, dispatch, showTrash, showLibrary]);
 
   // Follow hash edits made by the user (address bar, pasted links).
   const pagesRef = useRef(state.pages);
@@ -120,9 +138,17 @@ function Shell() {
       const id = window.location.hash.replace(/^#\/?/, "");
       if (id === "trash") {
         setShowTrash(true);
+        setShowLibrary(false);
+        return;
+      }
+      if (id === "library") {
+        setShowLibrary(true);
+        setShowTrash(false);
         return;
       }
       if (id && pagesRef.current[id]) {
+        setShowTrash(false);
+        setShowLibrary(false);
         dispatch({ type: "select_page", id });
       }
     }
@@ -159,9 +185,13 @@ function Shell() {
       document.title = "Trash · Juvio";
       return;
     }
+    if (showLibrary) {
+      document.title = "Library · Juvio";
+      return;
+    }
     const page = state.activePageId ? state.pages[state.activePageId] : undefined;
     document.title = page?.title ? `${page.title} · Juvio` : "Juvio";
-  }, [showTrash, state.activePageId, state.pages]);
+  }, [showTrash, showLibrary, state.activePageId, state.pages]);
 
   // Global keyboard shortcuts: undo / redo.
   useEffect(() => {
@@ -215,6 +245,7 @@ function Shell() {
           onCollapse={() => setSidebarOpen(false)}
           onSignOut={handleSignOut}
           onOpenTrash={openTrash}
+          onOpenLibrary={openLibrary}
           onSelectPage={selectPage}
         />
       ) : (
@@ -229,6 +260,8 @@ function Shell() {
       )}
       {showTrash ? (
         <TrashView />
+      ) : showLibrary ? (
+        <LibraryView />
       ) : (
         <PageEditor key={state.activePageId ?? "empty"} />
       )}
