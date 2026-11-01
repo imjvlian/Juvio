@@ -98,51 +98,67 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
     }
 
     case "duplicate_page": {
-      const page = state.pages[action.id];
-      if (!page) return state;
-      const newId = createId();
-      const copyPages: Record<string, Page> = { ...state.pages };
-      const idMap = new Map<string, string>();
-      idMap.set(action.id, newId);
+      const source = state.pages[action.id];
+      if (!source) return state;
 
-      const copyPage = (p: Page): Page => {
-        const newPageId = idMap.get(p.id) ?? createId();
-        const newChildren: string[] = [];
-        p.children.forEach((c) => {
-          const cid = idMap.get(c) ?? createId();
-          idMap.set(c, cid);
-          newChildren.push(cid);
-        });
-        return {
-          ...p,
-          id: newPageId,
-          title: `${p.title} (Copy)`,
-          parentId: p.parentId ? (idMap.get(p.parentId) ?? p.parentId) : p.parentId,
-          children: newChildren,
+      // Copy the page and every descendant, remapping parent/child links.
+      const idMap = new Map<string, string>();
+      const collect = (id: string) => {
+        if (idMap.has(id)) return;
+        idMap.set(id, createId());
+        for (const child of state.pages[id]?.children ?? []) collect(child);
+      };
+      collect(action.id);
+
+      const pages: Record<string, Page> = { ...state.pages };
+      for (const [oldId, newId] of idMap) {
+        const original = state.pages[oldId];
+        if (!original) continue;
+        pages[newId] = {
+          ...original,
+          id: newId,
+          title:
+            oldId === action.id
+              ? `${original.title.trim() || "Untitled"} (Copy)`
+              : original.title,
+          parentId:
+            oldId === action.id
+              ? original.parentId
+              : (idMap.get(original.parentId ?? "") ?? original.parentId),
+          children: original.children.map((child) => idMap.get(child) ?? child),
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
-      };
-
-      const newPage = copyPage(page);
-      copyPages[newPage.id] = newPage;
-
-      if (newPage.parentId && copyPages[newPage.parentId]) {
-        const parent = copyPages[newPage.parentId];
-        parent.children.push(newPage.id);
-        copyPages[parent.id] = { ...parent, updatedAt: Date.now() };
-      } else {
-        const order = [...state.rootOrder];
-        order.push(newPage.id);
       }
 
-      return { ...state, pages: copyPages, activePageId: newPage.id };
+      const copyId = idMap.get(action.id);
+      if (!copyId) return state;
+
+      let rootOrder = state.rootOrder;
+      if (source.parentId && pages[source.parentId]) {
+        const parent = pages[source.parentId];
+        pages[parent.id] = {
+          ...parent,
+          children: [...parent.children, copyId],
+          updatedAt: Date.now(),
+        };
+      } else {
+        const index = rootOrder.indexOf(action.id);
+        rootOrder = [...rootOrder];
+        rootOrder.splice(index >= 0 ? index + 1 : rootOrder.length, 0, copyId);
+      }
+
+      return { ...state, pages, rootOrder, activePageId: copyId };
     }
 
     case "move_page": {
       const page = state.pages[action.id];
       if (!page) return state;
       if (page.parentId === action.parentId) return state;
+      // A page cannot become its own ancestor.
+      if (action.parentId && descendants(state.pages, action.id).includes(action.parentId)) {
+        return state;
+      }
 
       const pages = { ...state.pages };
 

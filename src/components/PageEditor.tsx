@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Block, BlockType, Page } from "../types";
 import { createEmptyPage } from "../lib/seed";
 import { createId } from "../lib/id";
 import { plainText } from "../lib/caret";
+import { markdownFileName, pageToMarkdown } from "../lib/markdown";
 import { useWorkspace } from "../store/useWorkspace";
 import { BlockMenu, type MenuAnchor, type MenuMode } from "./BlockMenu";
 import { BlockRow, type FocusRequest } from "./BlockRow";
@@ -54,7 +55,7 @@ export function PageEditor() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<"before" | "after">("before");
-  const [pageMenu, setPageMenu] = useState(false);
+  const [pageMenu, setPageMenu] = useState<"root" | "move" | null>(null);
 
   const breadcrumbs = useMemo(
     () => (page ? ancestorsOf(page, state.pages) : []),
@@ -72,6 +73,23 @@ export function PageEditor() {
       return counter;
     });
   }, [page?.blocks]);
+
+  // Pages that can become the new parent: everything outside this page's subtree.
+  const moveTargets = useMemo(() => {
+    if (!page) return [];
+    const blocked = new Set<string>([page.id]);
+    const stack = [...page.children];
+    while (stack.length > 0) {
+      const id = stack.pop();
+      if (!id || blocked.has(id)) continue;
+      blocked.add(id);
+      const child = state.pages[id];
+      if (child) stack.push(...child.children);
+    }
+    return Object.values(state.pages)
+      .filter((candidate) => !blocked.has(candidate.id))
+      .sort((a, b) => (a.title || "Untitled").localeCompare(b.title || "Untitled"));
+  }, [page, state.pages]);
 
   useEffect(() => {
     const el = titleRef.current;
@@ -237,6 +255,24 @@ export function PageEditor() {
     setDropPosition(position);
   }
 
+  function handleMovePage(parentId: string | null) {
+    if (!page) return;
+    dispatch({ type: "move_page", id: page.id, parentId });
+    setPageMenu(null);
+  }
+
+  function handleExport() {
+    if (!page) return;
+    setPageMenu(null);
+    const blob = new Blob([pageToMarkdown(page)], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = markdownFileName(page.title);
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   return (
     <main className="page-scroll">
       <div className="page-topbar">
@@ -277,7 +313,7 @@ export function PageEditor() {
             <button
               type="button"
               className="page-action-btn"
-              onClick={() => setPageMenu((open) => !open)}
+              onClick={() => setPageMenu((current) => (current ? null : "root"))}
               title="More actions"
               aria-label="More actions"
             >
@@ -285,18 +321,59 @@ export function PageEditor() {
             </button>
             {pageMenu && (
               <div className="page-menu">
-                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>
-                  Duplicate
-                </button>
-                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
-                  Delete
-                </button>
-                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
-                  Move
-                </button>
-                <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
-                  Export
-                </button>
+                {pageMenu === "move" ? (
+                  <>
+                    <div className="page-menu-header">Move page to</div>
+                    <button type="button" className="page-menu-item" onClick={() => handleMovePage(null)}>
+                      No parent (top level)
+                    </button>
+                    {moveTargets.map((target) => (
+                      <button
+                        key={target.id}
+                        type="button"
+                        className="page-menu-item page-menu-page"
+                        onClick={() => handleMovePage(target.id)}
+                      >
+                        <span className="page-menu-page-icon">{target.icon ?? "📄"}</span>
+                        <span className="page-menu-page-title">{target.title || "Untitled"}</span>
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="page-menu-item"
+                      onClick={() => {
+                        setPageMenu(null);
+                        dispatch({ type: "duplicate_page", id: page.id });
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      className="page-menu-item"
+                      onClick={() => setPageMenu("move")}
+                    >
+                      Move to…
+                    </button>
+                    <button type="button" className="page-menu-item" onClick={handleExport}>
+                      Export as Markdown
+                    </button>
+                    <div className="page-menu-separator" />
+                    <button
+                      type="button"
+                      className="page-menu-item is-danger"
+                      onClick={() => {
+                        setPageMenu(null);
+                        dispatch({ type: "delete_page", id: page.id });
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -357,11 +434,20 @@ export function PageEditor() {
           aria-label="Page title"
         />
 
-        <div className="page-blocks">
+        <div
+          className="page-blocks"
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setDropTargetId(null);
+            }
+          }}
+        >
           {blocks.map((block, index) => (
-            <>
+            <Fragment key={block.id}>
+              {dropTargetId === block.id && dropPosition === "before" && (
+                <div className="block-drop-indicator" />
+              )}
               <BlockRow
-                key={block.id}
                 pageId={page.id}
                 block={block}
                 number={numbers[index]}
@@ -386,14 +472,11 @@ export function PageEditor() {
                 onReorder={handleReorder}
                 onDragOver={handleDragOver}
               />
-              {dropTargetId === block.id && dropPosition === "before" && (
+              {dropTargetId === block.id && dropPosition === "after" && (
                 <div className="block-drop-indicator" />
               )}
-            </>
+            </Fragment>
           ))}
-          {dropTargetId === blocks[blocks.length - 1]?.id && dropPosition === "after" && (
-            <div className="block-drop-indicator" />
-          )}
         </div>
 
         <div className="page-tail" onClick={handleTailClick} role="presentation" />

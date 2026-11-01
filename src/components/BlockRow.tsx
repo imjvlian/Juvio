@@ -69,6 +69,8 @@ export function BlockRow({
 }: BlockRowProps) {
   const { dispatch } = useWorkspace();
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const blockRef = useRef<HTMLDivElement | null>(null);
+  const lastDrop = useRef<{ id: string; position: "before" | "after" } | null>(null);
   const lastLocalHtml = useRef<string | null>(null);
   const handledFocusToken = useRef<number | null>(null);
   const [isComposing, setIsComposing] = useState(false);
@@ -259,27 +261,35 @@ export function BlockRow({
 
   function handleDragStart(event: React.DragEvent) {
     setIsDragging(true);
-    event.dataTransfer.setData("text/plain", block.id);
+    event.dataTransfer.setData("application/x-juvio-block", block.id);
     event.dataTransfer.effectAllowed = "move";
+    const row = blockRef.current;
+    if (row) event.dataTransfer.setDragImage(row, 16, 16);
   }
 
   function handleDragOver(event: React.DragEvent, targetId: string) {
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
     const rect = event.currentTarget.getBoundingClientRect();
     const y = event.clientY;
     const middle = rect.top + rect.height / 2;
     const position = y < middle ? "before" : "after";
+    if (lastDrop.current?.id === targetId && lastDrop.current.position === position) return;
+    lastDrop.current = { id: targetId, position };
     onDragOver(targetId, position);
   }
 
   function handleDragEnd() {
     setIsDragging(false);
+    lastDrop.current = null;
   }
 
   function handleDrop(event: React.DragEvent) {
     event.preventDefault();
-    const draggedId = event.dataTransfer.getData("text/plain");
+    const draggedId =
+      event.dataTransfer.getData("application/x-juvio-block") ||
+      event.dataTransfer.getData("text/plain");
     if (draggedId && draggedId !== block.id) {
       const rect = event.currentTarget.getBoundingClientRect();
       const y = event.clientY;
@@ -287,13 +297,17 @@ export function BlockRow({
       const position = y < middle ? "before" : "after";
       onReorder(draggedId, block.id, position);
     }
+    lastDrop.current = null;
   }
 
   if (block.type === "divider") {
     return (
       <div
-        className="block block-divider"
+        ref={blockRef}
+        className={`block block-divider${isDragging ? " is-dragging" : ""}`}
         data-block-id={block.id}
+        onDragOver={(event) => handleDragOver(event, block.id)}
+        onDrop={handleDrop}
         onKeyDown={(event) => {
           if (event.key === "Backspace" || event.key === "Delete") {
             event.preventDefault();
@@ -308,6 +322,8 @@ export function BlockRow({
           block={block}
           onInsert={() => onInsertBelow(block.id)}
           onOpenMenu={(button) => openAtButton(button, "turn")}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         />
         <div className="divider-line" role="separator" tabIndex={0} aria-label="Divider" />
       </div>
@@ -324,12 +340,10 @@ export function BlockRow({
 
   return (
     <div
+      ref={blockRef}
       className={`block block-${block.type}${isDragging ? " is-dragging" : ""}`}
       data-block-id={block.id}
       data-empty={isEmpty}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
       onDragOver={(event) => handleDragOver(event, block.id)}
       onDrop={handleDrop}
     >
@@ -337,6 +351,8 @@ export function BlockRow({
         block={block}
         onInsert={() => onInsertBelow(block.id)}
         onOpenMenu={(button) => openAtButton(button, "turn")}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
       />
       {block.type === "bulleted" && (
         <span className="block-marker" aria-hidden="true">
@@ -413,10 +429,14 @@ function BlockControls({
   block,
   onInsert,
   onOpenMenu,
+  onDragStart,
+  onDragEnd,
 }: {
   block: Block;
   onInsert: () => void;
   onOpenMenu: (button: HTMLElement) => void;
+  onDragStart: (event: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   return (
     <div className="block-controls" aria-hidden={false}>
@@ -425,7 +445,10 @@ function BlockControls({
         className="block-control block-drag-handle"
         tabIndex={-1}
         aria-label="Drag to reorder"
-        draggable="false"
+        title="Drag to move"
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
       >
         ⋮⋮
       </button>
