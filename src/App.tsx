@@ -21,7 +21,7 @@ function readTheme(): Theme {
   } catch {
     // Fall back to the system preference.
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "dark";
 }
 
 function readSidebarOpen(): boolean {
