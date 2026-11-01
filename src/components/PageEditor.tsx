@@ -310,6 +310,9 @@ export function PageEditor() {
           >
             ⋮
           </button>
+          <button type="button" className="page-action-btn page-share-btn" title="Share">
+            Share
+          </button>
           {pageMenu && (
             <div className="page-menu">
               <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>

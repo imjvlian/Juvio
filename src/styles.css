@@ -1539,6 +1539,13 @@ textarea:focus-visible {
   color: var(--text-strong);
 }
 
+.page-share-btn {
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+}
+
 .page-menu {
   position: absolute;
   top: 40px;
