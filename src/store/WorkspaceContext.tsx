@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
 import { createSeedWorkspace, createEmptyPage } from "../lib/seed";
+import { createId } from "../lib/id";
 import {
   loadWorkspaceFromSupabase,
   saveWorkspaceToSupabase,
@@ -94,6 +95,87 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       }
 
       return { ...state, pages, rootOrder, activePageId };
+    }
+
+    case "duplicate_page": {
+      const page = state.pages[action.id];
+      if (!page) return state;
+      const newId = createId();
+      const copyPages: Record<string, Page> = { ...state.pages };
+      const idMap = new Map<string, string>();
+      idMap.set(action.id, newId);
+
+      const copyPage = (p: Page): Page => {
+        const newPageId = idMap.get(p.id) ?? createId();
+        const newChildren: string[] = [];
+        p.children.forEach((c) => {
+          const cid = idMap.get(c) ?? createId();
+          idMap.set(c, cid);
+          newChildren.push(cid);
+        });
+        return {
+          ...p,
+          id: newPageId,
+          title: `${p.title} (Copy)`,
+          parentId: p.parentId ? (idMap.get(p.parentId) ?? p.parentId) : p.parentId,
+          children: newChildren,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      };
+
+      const newPage = copyPage(page);
+      copyPages[newPage.id] = newPage;
+
+      if (newPage.parentId && copyPages[newPage.parentId]) {
+        const parent = copyPages[newPage.parentId];
+        parent.children.push(newPage.id);
+        copyPages[parent.id] = { ...parent, updatedAt: Date.now() };
+      } else {
+        const order = [...state.rootOrder];
+        order.push(newPage.id);
+      }
+
+      return { ...state, pages: copyPages, activePageId: newPage.id };
+    }
+
+    case "move_page": {
+      const page = state.pages[action.id];
+      if (!page) return state;
+      if (page.parentId === action.parentId) return state;
+
+      const pages = { ...state.pages };
+
+      if (page.parentId && pages[page.parentId]) {
+        const parent = pages[page.parentId];
+        pages[parent.id] = {
+          ...parent,
+          children: parent.children.filter((id) => id !== action.id),
+          updatedAt: Date.now(),
+        };
+      } else {
+        const order = [...state.rootOrder];
+        const idx = order.indexOf(action.id);
+        if (idx >= 0) order.splice(idx, 1);
+        pages[action.id] = { ...pages[action.id], parentId: action.parentId, updatedAt: Date.now() };
+        return { ...state, pages, rootOrder: order, activePageId: state.activePageId };
+      }
+
+      if (action.parentId && pages[action.parentId]) {
+        const parent = pages[action.parentId];
+        if (!parent.children.includes(action.id)) {
+          parent.children.push(action.id);
+          pages[parent.id] = { ...parent, updatedAt: Date.now() };
+        }
+      } else {
+        const order = [...state.rootOrder];
+        order.push(action.id);
+        pages[action.id] = { ...pages[action.id], parentId: action.parentId, updatedAt: Date.now() };
+        return { ...state, pages, rootOrder: order, activePageId: state.activePageId };
+      }
+
+      pages[action.id] = { ...pages[action.id], parentId: action.parentId, updatedAt: Date.now() };
+      return { ...state, pages, activePageId: state.activePageId };
     }
 
     case "update_page":

@@ -4,6 +4,8 @@ export type WorkspaceAction =
   | { type: "select_page"; id: string }
   | { type: "create_page"; page: Page; afterId?: string }
   | { type: "delete_page"; id: string }
+  | { type: "duplicate_page"; id: string }
+  | { type: "move_page"; id: string; parentId: string | null }
   | {
       type: "update_page";
       id: string;

@@ -281,7 +281,11 @@ export function BlockRow({
     event.preventDefault();
     const draggedId = event.dataTransfer.getData("text/plain");
     if (draggedId && draggedId !== block.id) {
-      onReorder(draggedId, block.id, "before");
+      const rect = event.currentTarget.getBoundingClientRect();
+      const y = event.clientY;
+      const middle = rect.top + rect.height / 2;
+      const position = y < middle ? "before" : "after";
+      onReorder(draggedId, block.id, position);
     }
   }
 
