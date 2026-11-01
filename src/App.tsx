@@ -156,7 +156,7 @@ export default function App() {
         return;
       }
       setUser({ id: data.session.user.id, email: data.session.user.email ?? null });
-      setView("workspaces");
+      setView(workspaceId ? "editor" : "workspaces");
       setLoading(false);
     });
 
@@ -167,7 +167,7 @@ export default function App() {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         if (session) {
           setUser({ id: session.user.id, email: session.user.email ?? null });
-          setView("workspaces");
+          setView(workspaceId ? "editor" : "workspaces");
         }
       } else if (event === "SIGNED_OUT") {
         setUser(null);
@@ -198,7 +198,7 @@ export default function App() {
     return (
       <LoginForm
         onAuthenticated={() => {
-          setView("workspaces");
+          setView(workspaceId ? "editor" : "workspaces");
         }}
       />
     );
