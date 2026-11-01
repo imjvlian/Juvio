@@ -75,11 +75,25 @@ const COMMANDS: Command[] = [
     keywords: "quote blockquote citation",
   },
   {
+    type: "callout",
+    label: "Callout",
+    description: "Make writing stand out",
+    glyph: "💡",
+    keywords: "callout info note tip warning",
+  },
+  {
     type: "code",
     label: "Code",
     description: "Capture a code snippet",
     glyph: "</>",
     keywords: "code snippet pre monospace",
+  },
+  {
+    type: "image",
+    label: "Image",
+    description: "Embed an image from a URL",
+    glyph: "🖼",
+    keywords: "image picture photo media embed url",
   },
   {
     type: "divider",

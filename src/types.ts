@@ -7,7 +7,9 @@ export type BlockType =
   | "numbered"
   | "todo"
   | "quote"
+  | "callout"
   | "code"
+  | "image"
   | "divider";
 
 export interface Block {

@@ -84,6 +84,45 @@ export function BlockRow({
     dispatch({ type: "update_block", pageId, blockId: block.id, patch: { html: normalized } });
   }
 
+  function wrapSelection(tag: "code") {
+    const el = contentRef.current;
+    if (!el) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !el.contains(range.commonAncestorContainer)) return;
+    const wrapper = document.createElement(tag);
+    wrapper.appendChild(range.extractContents());
+    range.insertNode(wrapper);
+    selection.removeAllRanges();
+    const next = document.createRange();
+    next.selectNodeContents(wrapper);
+    selection.addRange(next);
+    pushHtml(el.innerHTML);
+  }
+
+  function addLink() {
+    const el = contentRef.current;
+    if (!el) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !el.contains(range.commonAncestorContainer)) return;
+    const saved = range.cloneRange();
+    const url = window.prompt("Link URL", "https://");
+    if (!url) return;
+    selection.removeAllRanges();
+    selection.addRange(saved);
+    document.execCommand("createLink", false, url);
+    pushHtml(el.innerHTML);
+  }
+
+  function editImageSource() {
+    const url = window.prompt("Image URL", block.html.trim() || "https://");
+    if (url === null) return;
+    dispatch({ type: "update_block", pageId, blockId: block.id, patch: { html: url.trim() } });
+  }
+
   // Sync external HTML changes (merge, paste, type switches) without stealing the caret.
   useEffect(() => {
     const el = contentRef.current;
@@ -127,12 +166,28 @@ export function BlockRow({
 
     const mod = event.metaKey || event.ctrlKey;
 
-    if (mod && !event.altKey && !event.shiftKey) {
+    if (mod && !event.altKey) {
       const key = event.key.toLowerCase();
-      if (key === "b" || key === "i" || key === "u") {
+      if (!event.shiftKey && (key === "b" || key === "i" || key === "u")) {
         event.preventDefault();
         document.execCommand(key === "b" ? "bold" : key === "i" ? "italic" : "underline");
         window.setTimeout(() => pushHtml(el.innerHTML), 0);
+        return;
+      }
+      if (!event.shiftKey && key === "e") {
+        event.preventDefault();
+        wrapSelection("code");
+        return;
+      }
+      if (event.shiftKey && key === "s") {
+        event.preventDefault();
+        document.execCommand("strikeThrough");
+        window.setTimeout(() => pushHtml(el.innerHTML), 0);
+        return;
+      }
+      if (!event.shiftKey && key === "k") {
+        event.preventDefault();
+        addLink();
         return;
       }
     }
@@ -330,6 +385,51 @@ export function BlockRow({
     );
   }
 
+  if (block.type === "image") {
+    const src = block.html.trim();
+    return (
+      <div
+        ref={blockRef}
+        className={`block block-image${isDragging ? " is-dragging" : ""}`}
+        data-block-id={block.id}
+        onDragOver={(event) => handleDragOver(event, block.id)}
+        onDrop={handleDrop}
+        onKeyDown={(event) => {
+          if (event.key === "Backspace" || event.key === "Delete") {
+            event.preventDefault();
+            onDelete(block.id);
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            onInsertBelow(block.id);
+          }
+        }}
+      >
+        <BlockControls
+          block={block}
+          onInsert={() => onInsertBelow(block.id)}
+          onOpenMenu={(button) => openAtButton(button, "turn")}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        />
+        {src ? (
+          <button
+            type="button"
+            className="image-frame"
+            onClick={editImageSource}
+            title="Change image URL"
+          >
+            <img src={src} alt="" draggable={false} />
+          </button>
+        ) : (
+          <button type="button" className="image-placeholder" onClick={editImageSource}>
+            <span aria-hidden="true">🖼</span>
+            <span>Add an image from a URL</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   const contentClass = [
     "block-content",
     block.type === "code" ? "is-code" : "",
@@ -362,6 +462,11 @@ export function BlockRow({
       {block.type === "numbered" && (
         <span className="block-marker" aria-hidden="true">
           {number ?? 1}.
+        </span>
+      )}
+      {block.type === "callout" && (
+        <span className="block-marker callout-icon" aria-hidden="true">
+          💡
         </span>
       )}
       {block.type === "todo" && (
@@ -418,6 +523,8 @@ function placeholderFor(type: BlockType): string {
       return "To-do";
     case "quote":
       return "Quote";
+    case "callout":
+      return "Type something…";
     case "code":
       return "Code";
     default:

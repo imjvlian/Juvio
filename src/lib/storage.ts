@@ -12,7 +12,9 @@ const BLOCK_TYPES = new Set([
   "numbered",
   "todo",
   "quote",
+  "callout",
   "code",
+  "image",
   "divider",
 ]);
 

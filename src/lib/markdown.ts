@@ -57,6 +57,10 @@ function blockToMarkdown(block: Block, index: number): string {
       return `- [${block.checked ? "x" : " "}] ${text}`;
     case "quote":
       return `> ${text.replace(/\n/g, "\n> ")}`;
+    case "callout":
+      return `> 💡 ${text.replace(/\n/g, "\n> ")}`;
+    case "image":
+      return text ? `![image](${text})` : "";
     case "code":
       return `\`\`\`\n${text}\n\`\`\``;
     case "divider":
