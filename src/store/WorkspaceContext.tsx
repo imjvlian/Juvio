@@ -124,6 +124,18 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       return withPage(state, page.id, (current) => ({ ...current, blocks }));
     }
 
+    case "move_block": {
+      const page = state.pages[action.pageId];
+      if (!page) return state;
+      const blocks = [...page.blocks];
+      const idx = blocks.findIndex((b) => b.id === action.blockId);
+      if (idx < 0) return state;
+      const [moved] = blocks.splice(idx, 1);
+      const toIndex = Math.max(0, Math.min(action.toIndex, blocks.length));
+      blocks.splice(toIndex, 0, moved);
+      return withPage(state, page.id, (current) => ({ ...current, blocks }));
+    }
+
     case "set_blocks":
       return withPage(state, action.pageId, (page) => ({ ...page, blocks: action.blocks }));
 

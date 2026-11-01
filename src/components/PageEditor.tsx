@@ -52,6 +52,8 @@ export function PageEditor() {
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<"before" | "after">("before");
 
   const breadcrumbs = useMemo(
     () => (page ? ancestorsOf(page, state.pages) : []),
@@ -215,6 +217,25 @@ export function PageEditor() {
     }
   }
 
+  function handleReorder(draggedId: string, targetId: string | null, position: "before" | "after") {
+    if (!page) return;
+    if (draggedId === targetId) return;
+    const index = blocks.findIndex((b) => b.id === draggedId);
+    if (index < 0) return;
+    let toIndex = blocks.findIndex((b) => b.id === targetId);
+    if (toIndex < 0) toIndex = blocks.length;
+    else if (position === "after") toIndex += 1;
+    if (toIndex > index) toIndex -= 1;
+    dispatch({ type: "move_block", pageId: page.id, blockId: draggedId, toIndex });
+    setDropTargetId(null);
+    setDropPosition("before");
+  }
+
+  function handleDragOver(targetId: string, position: "before" | "after") {
+    setDropTargetId(targetId);
+    setDropPosition(position);
+  }
+
   return (
     <main className="page-scroll">
       <div className="page">
@@ -296,31 +317,41 @@ export function PageEditor() {
 
         <div className="page-blocks">
           {blocks.map((block, index) => (
-            <BlockRow
-              key={block.id}
-              pageId={page.id}
-              block={block}
-              number={numbers[index]}
-              isFirst={index === 0}
-              isLast={index === blocks.length - 1}
-              focusRequest={focusRequest}
-              onFocusHandled={(token) =>
-                setFocusRequest((current) => (current && current.token === token ? null : current))
-              }
-              onSplit={handleSplit}
-              onMergePrevious={handleMergePrevious}
-              onConvert={handleConvert}
-              onInsertBelow={handleInsertBelow}
-              onDelete={handleDelete}
-              onPasteLines={handlePasteLines}
-              onOpenMenu={(blockId, anchor, mode) => setMenu({ blockId, anchor, mode })}
-              onFocusNeighbor={(blockId, position) => {
-                const index = blocks.findIndex((block) => block.id === blockId);
-                const target = blocks[index + (position === "end" ? -1 : 1)];
-                if (target) requestFocus(target.id, position);
-              }}
-            />
+            <>
+              <BlockRow
+                key={block.id}
+                pageId={page.id}
+                block={block}
+                number={numbers[index]}
+                isFirst={index === 0}
+                isLast={index === blocks.length - 1}
+                focusRequest={focusRequest}
+                onFocusHandled={(token) =>
+                  setFocusRequest((current) => (current && current.token === token ? null : current))
+                }
+                onSplit={handleSplit}
+                onMergePrevious={handleMergePrevious}
+                onConvert={handleConvert}
+                onInsertBelow={handleInsertBelow}
+                onDelete={handleDelete}
+                onPasteLines={handlePasteLines}
+                onOpenMenu={(blockId, anchor, mode) => setMenu({ blockId, anchor, mode })}
+                onFocusNeighbor={(blockId, position) => {
+                  const index = blocks.findIndex((block) => block.id === blockId);
+                  const target = blocks[index + (position === "end" ? -1 : 1)];
+                  if (target) requestFocus(target.id, position);
+                }}
+                onReorder={handleReorder}
+                onDragOver={handleDragOver}
+              />
+              {dropTargetId === block.id && dropPosition === "before" && (
+                <div className="block-drop-indicator" />
+              )}
+            </>
           ))}
+          {dropTargetId === blocks[blocks.length - 1]?.id && dropPosition === "after" && (
+            <div className="block-drop-indicator" />
+          )}
         </div>
 
         <div className="page-tail" onClick={handleTailClick} role="presentation" />

@@ -28,6 +28,8 @@ interface BlockRowProps {
   onPasteLines: (blockId: string, currentHtml: string, remaining: string[]) => void;
   onOpenMenu: (blockId: string, anchor: MenuAnchor, mode: MenuMode) => void;
   onFocusNeighbor: (blockId: string, position: "start" | "end") => void;
+  onReorder: (blockId: string, targetId: string | null, position: "before" | "after") => void;
+  onDragOver: (targetId: string, position: "before" | "after") => void;
 }
 
 const SHORTCUTS: Record<string, BlockType> = {
@@ -62,12 +64,15 @@ export function BlockRow({
   onPasteLines,
   onOpenMenu,
   onFocusNeighbor,
+  onReorder,
+  onDragOver,
 }: BlockRowProps) {
   const { dispatch } = useWorkspace();
   const contentRef = useRef<HTMLDivElement | null>(null);
   const lastLocalHtml = useRef<string | null>(null);
   const handledFocusToken = useRef<number | null>(null);
   const [isComposing, setIsComposing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const isEmpty = plainText(block.html).length === 0;
 
@@ -252,6 +257,34 @@ export function BlockRow({
     pushHtml(el.innerHTML);
   }
 
+  function handleDragStart(event: React.DragEvent) {
+    setIsDragging(true);
+    event.dataTransfer.setData("text/plain", block.id);
+    event.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(event: React.DragEvent, targetId: string) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY;
+    const middle = rect.top + rect.height / 2;
+    const position = y < middle ? "before" : "after";
+    onDragOver(targetId, position);
+  }
+
+  function handleDragEnd() {
+    setIsDragging(false);
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    const draggedId = event.dataTransfer.getData("text/plain");
+    if (draggedId && draggedId !== block.id) {
+      onReorder(draggedId, block.id, "before");
+    }
+  }
+
   if (block.type === "divider") {
     return (
       <div
@@ -286,7 +319,16 @@ export function BlockRow({
     .join(" ");
 
   return (
-    <div className={`block block-${block.type}`} data-block-id={block.id} data-empty={isEmpty}>
+    <div
+      className={`block block-${block.type}${isDragging ? " is-dragging" : ""}`}
+      data-block-id={block.id}
+      data-empty={isEmpty}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={(event) => handleDragOver(event, block.id)}
+      onDrop={handleDrop}
+    >
       <BlockControls
         block={block}
         onInsert={() => onInsertBelow(block.id)}
@@ -374,6 +416,15 @@ function BlockControls({
 }) {
   return (
     <div className="block-controls" aria-hidden={false}>
+      <button
+        type="button"
+        className="block-control block-drag-handle"
+        tabIndex={-1}
+        aria-label="Drag to reorder"
+        draggable="false"
+      >
+        ⋮⋮
+      </button>
       <button type="button" className="block-control" tabIndex={-1} aria-label="Add block below" onClick={onInsert}>
         <PlusIcon />
       </button>

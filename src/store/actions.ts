@@ -12,5 +12,6 @@ export type WorkspaceAction =
   | { type: "add_block"; pageId: string; block: Block; index?: number }
   | { type: "update_block"; pageId: string; blockId: string; patch: Partial<Block> }
   | { type: "delete_block"; pageId: string; blockId: string }
+  | { type: "move_block"; pageId: string; blockId: string; toIndex: number }
   | { type: "set_blocks"; pageId: string; blocks: Block[] }
   | { type: "reset"; state: WorkspaceState };
