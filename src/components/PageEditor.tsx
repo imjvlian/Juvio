@@ -330,17 +330,17 @@ export function PageEditor() {
           </button>
           {pageMenu && (
             <div className="page-menu">
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal("save"); }}>
-                Save as template
-              </button>
-              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal("pick"); }}>
-                New from template
-              </button>
               <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "duplicate_page", id: page.id }); }}>
-                Duplicate page
+                Duplicate
               </button>
               <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); dispatch({ type: "delete_page", id: page.id }); }}>
-                Delete page
+                Delete
+              </button>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); setTemplateModal(null); }}>
+                Move
+              </button>
+              <button type="button" className="page-menu-item" onClick={() => { setPageMenu(false); }}>
+                Export
               </button>
             </div>
           )}
