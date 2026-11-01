@@ -46,7 +46,7 @@ function makeBlock(type: BlockType, html = ""): Block {
 }
 
 export function PageEditor() {
-  const { state, dispatch } = useWorkspace();
+  const { state, dispatch, favorites, toggleFavorite, moveToTrash } = useWorkspace();
   const page = state.activePageId ? state.pages[state.activePageId] : undefined;
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const focusToken = useRef(0);
@@ -306,7 +306,17 @@ export function PageEditor() {
           <button type="button" className="page-action-btn" title="Comments" aria-label="Comments">
             <CommentIcon width={17} height={17} />
           </button>
-          <button type="button" className="page-action-btn" title="Add to favorites" aria-label="Add to favorites">
+          <button
+            type="button"
+            className={`page-action-btn${page && favorites.includes(page.id) ? " is-starred" : ""}`}
+            title={page && favorites.includes(page.id) ? "Remove from favorites" : "Add to favorites"}
+            aria-label={page && favorites.includes(page.id) ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={page ? favorites.includes(page.id) : false}
+            onClick={() => {
+              if (!page) return;
+              toggleFavorite(page.id);
+            }}
+          >
             <StarIcon width={17} height={17} />
           </button>
           <div className="page-menu-wrap">
@@ -367,10 +377,10 @@ export function PageEditor() {
                       className="page-menu-item is-danger"
                       onClick={() => {
                         setPageMenu(null);
-                        dispatch({ type: "delete_page", id: page.id });
+                        moveToTrash(page.id);
                       }}
                     >
-                      Delete
+                      Move to Trash
                     </button>
                   </>
                 )}

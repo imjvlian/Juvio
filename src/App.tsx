@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { PageEditor } from "./components/PageEditor";
 import { Sidebar } from "./components/Sidebar";
 import { SidebarIcon } from "./components/icons";
@@ -43,9 +43,41 @@ function readWorkspaceId(): string | null {
 }
 
 function Shell() {
-  const { state, isLoading, canUndo, canRedo, undo, redo } = useWorkspace();
+  const { state, dispatch, isLoading, canUndo, canRedo, undo, redo } = useWorkspace();
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(readSidebarOpen);
+
+  // Keep the URL in sync with the active page so links can be shared or refreshed.
+  // A deep link wins over the restored selection once the workspace has loaded.
+  useEffect(() => {
+    if (isLoading) return;
+    const hashId = window.location.hash.replace(/^#\/?/, "");
+    if (hashId && hashId !== state.activePageId && state.pages[hashId]) {
+      dispatch({ type: "select_page", id: hashId });
+      return;
+    }
+    if (!state.activePageId) return;
+    const next = `#/${state.activePageId}`;
+    if (window.location.hash !== next) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [isLoading, state.activePageId, state.pages, dispatch]);
+
+  // Follow hash edits made by the user (address bar, pasted links).
+  const pagesRef = useRef(state.pages);
+  useEffect(() => {
+    pagesRef.current = state.pages;
+  }, [state.pages]);
+  useEffect(() => {
+    function applyHash() {
+      const id = window.location.hash.replace(/^#\/?/, "");
+      if (id && pagesRef.current[id]) {
+        dispatch({ type: "select_page", id });
+      }
+    }
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [dispatch]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -222,7 +254,7 @@ export default function App() {
   if (!user || !workspaceId) return <div className="auth-page"><div className="auth-card">Select a workspace.</div></div>;
 
   return (
-    <WorkspaceProvider workspaceId={workspaceId} userId={user.id}>
+    <WorkspaceProvider key={workspaceId} workspaceId={workspaceId} userId={user.id}>
       <Shell />
     </WorkspaceProvider>
   );

@@ -55,8 +55,17 @@ interface SidebarProps {
 }
 
 export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: SidebarProps) {
-  const { state, dispatch } = useWorkspace();
+  const {
+    state,
+    dispatch,
+    favorites,
+    trash,
+    moveToTrash,
+    restoreFromTrash,
+    deleteForever,
+  } = useWorkspace();
   const [query, setQuery] = useState("");
+  const [trashOpen, setTrashOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const stored = loadExpanded();
     if (stored) return stored;
@@ -119,14 +128,13 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
   }
 
   function deletePage(page: Page) {
-    const descendants = countDescendants(page.id, state.pages);
-    const label = page.title.trim() || "Untitled";
-    const message =
-      descendants > 0
-        ? `Delete “${label}” and its ${descendants} sub-page${descendants === 1 ? "" : "s"}? This cannot be undone.`
-        : `Delete “${label}”? This cannot be undone.`;
-    if (window.confirm(message)) dispatch({ type: "delete_page", id: page.id });
+    moveToTrash(page.id);
   }
+
+  const favoritePages = useMemo(
+    () => favorites.map((id) => state.pages[id]).filter((page): page is Page => Boolean(page)),
+    [favorites, state.pages],
+  );
 
   function handleReset() {
     if (!window.confirm("Reset the workspace? Local pages will be replaced by the sample pages.")) return;
@@ -170,6 +178,25 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
         <PlusIcon />
         New page
       </button>
+
+      {favoritePages.length > 0 && (
+        <div className="sidebar-section sidebar-section-stack">
+          <span className="sidebar-section-label">Favorites</span>
+          <div className="favorite-list">
+            {favoritePages.map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                className={`favorite-item${page.id === state.activePageId ? " is-active" : ""}`}
+                onClick={() => dispatch({ type: "select_page", id: page.id })}
+              >
+                <span className="tree-icon">{page.icon ?? <PageIcon />}</span>
+                <span className="tree-title">{page.title || "Untitled"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="sidebar-section">
         <span className="sidebar-section-label">Private</span>
@@ -268,10 +295,73 @@ export function Sidebar({ theme, onToggleTheme, onCollapse, onSignOut }: Sidebar
         <button type="button" className="ghost-icon" aria-label="Sign out" title="Sign out" onClick={onSignOut}>
           <LogOutIcon />
         </button>
-        <button type="button" className="ghost-icon" aria-label="Reset workspace" onClick={handleReset}>
+        <button type="button" className="footer-button" onClick={() => setTrashOpen(true)}>
           <TrashIcon />
+          Trash{trash.length > 0 ? ` (${trash.length})` : ""}
+        </button>
+        <button type="button" className="ghost-icon" aria-label="Reset workspace" title="Reset workspace" onClick={handleReset}>
+          <span aria-hidden="true">↺</span>
         </button>
       </div>
+
+      {trashOpen && (
+        <div className="modal-backdrop" onClick={() => setTrashOpen(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Trash"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Trash</h2>
+              <button
+                type="button"
+                className="ghost-icon"
+                aria-label="Close trash"
+                onClick={() => setTrashOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              {trash.length === 0 ? (
+                <p className="modal-empty">Trash is empty.</p>
+              ) : (
+                trash.map((entry) => (
+                  <div key={entry.id} className="trash-row">
+                    <span className="tree-icon">{entry.icon ?? <PageIcon />}</span>
+                    <span className="trash-copy">
+                      <span className="trash-title">{entry.title}</span>
+                      <small>
+                        {entry.pages.length} page{entry.pages.length === 1 ? "" : "s"} ·{" "}
+                        {new Date(entry.deletedAt).toLocaleString()}
+                      </small>
+                    </span>
+                    <button
+                      type="button"
+                      className="trash-action"
+                      onClick={() => {
+                        restoreFromTrash(entry.id);
+                        setTrashOpen(false);
+                      }}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="trash-action is-danger"
+                      onClick={() => deleteForever(entry.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -371,11 +461,3 @@ function TreeItem({
   );
 }
 
-function countDescendants(id: string, pages: Record<string, Page>): number {
-  const page = pages[id];
-  if (!page) return 0;
-  return page.children.reduce(
-    (total, childId) => total + 1 + countDescendants(childId, pages),
-    0,
-  );
-}

@@ -3,6 +3,8 @@ import type { Page, WorkspaceState } from "../types";
 import { loadWorkspace, saveWorkspace } from "../lib/storage";
 import { createSeedWorkspace, createEmptyPage } from "../lib/seed";
 import { createId } from "../lib/id";
+import { loadFavorites, saveFavorites } from "../lib/favorites";
+import { collectSubtree, loadTrash, saveTrash, type TrashEntry } from "../lib/trash";
 import {
   loadWorkspaceFromSupabase,
   saveWorkspaceToSupabase,
@@ -95,6 +97,41 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       }
 
       return { ...state, pages, rootOrder, activePageId };
+    }
+
+    case "restore_pages": {
+      // Restore a trashed subtree, skipping pages that already exist.
+      const incoming = action.pages.filter((page) => !state.pages[page.id]);
+      const restored = new Set(incoming.map((page) => page.id));
+      const root = incoming.find((page) => page.id === action.rootId) ?? incoming[0];
+      if (!root) return state;
+
+      const pages: Record<string, Page> = { ...state.pages };
+      for (const page of incoming) {
+        pages[page.id] = {
+          ...page,
+          children: page.children.filter((child) => restored.has(child)),
+          updatedAt: Date.now(),
+        };
+      }
+
+      const parent = root.parentId ? pages[root.parentId] : undefined;
+      let rootOrder = state.rootOrder;
+      if (parent) {
+        pages[parent.id] = {
+          ...parent,
+          children: parent.children.includes(root.id)
+            ? parent.children
+            : [...parent.children, root.id],
+          updatedAt: Date.now(),
+        };
+      } else {
+        // The old parent is gone, so the restored root becomes a top-level page.
+        pages[root.id] = { ...pages[root.id], parentId: null };
+        if (!rootOrder.includes(root.id)) rootOrder = [...rootOrder, root.id];
+      }
+
+      return { ...state, pages, rootOrder, activePageId: root.id };
     }
 
     case "duplicate_page": {
@@ -285,6 +322,7 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
 const CONTENT_ACTIONS = new Set([
   "create_page",
   "delete_page",
+  "restore_pages",
   "update_page",
   "add_block",
   "update_block",
@@ -309,6 +347,18 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
   const [past, setPast] = useState<WorkspaceState[]>([]);
   const [future, setFuture] = useState<WorkspaceState[]>([]);
   const [isLoading, setIsLoading] = useState(!!workspaceId && !!userId);
+
+  const scope = workspaceId ?? "local";
+  const [trash, setTrash] = useState<TrashEntry[]>(() => loadTrash(scope));
+  const [favorites, setFavorites] = useState<string[]>(() => loadFavorites(scope));
+
+  useEffect(() => {
+    saveTrash(scope, trash);
+  }, [scope, trash]);
+
+  useEffect(() => {
+    saveFavorites(scope, favorites);
+  }, [scope, favorites]);
 
   const lastActionRef = useRef<{ type: string; id?: string; blockId?: string; time: number } | null>(null);
 
@@ -420,6 +470,52 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
 
+  const toggleFavorite = useCallback((id: string) => {
+    setFavorites((current) =>
+      current.includes(id) ? current.filter((favorite) => favorite !== id) : [id, ...current],
+    );
+  }, []);
+
+  // Move a page and its sub-pages to the local trash, keeping a restorable snapshot.
+  const moveToTrash = useCallback(
+    (id: string) => {
+      const page = state.pages[id];
+      if (!page) return;
+      const pages = collectSubtree(state.pages, id);
+      const removed = new Set(pages.map((entry) => entry.id));
+      setTrash((current) =>
+        [
+          {
+            id: createId(),
+            rootId: id,
+            title: page.title.trim() || "Untitled",
+            icon: page.icon,
+            deletedAt: Date.now(),
+            pages,
+          },
+          ...current,
+        ].slice(0, 20),
+      );
+      setFavorites((current) => current.filter((favorite) => !removed.has(favorite)));
+      dispatch({ type: "delete_page", id });
+    },
+    [state.pages, dispatch],
+  );
+
+  const restoreFromTrash = useCallback(
+    (entryId: string) => {
+      const entry = trash.find((candidate) => candidate.id === entryId);
+      if (!entry) return;
+      dispatch({ type: "restore_pages", pages: entry.pages, rootId: entry.rootId });
+      setTrash((current) => current.filter((candidate) => candidate.id !== entryId));
+    },
+    [trash, dispatch],
+  );
+
+  const deleteForever = useCallback((entryId: string) => {
+    setTrash((current) => current.filter((candidate) => candidate.id !== entryId));
+  }, []);
+
   const undo = useCallback(() => {
     if (!canUndo) return;
     const previous = past[past.length - 1];
@@ -453,8 +549,38 @@ export function WorkspaceProvider({ children, workspaceId, userId }: WorkspacePr
   }, [state, workspaceId, userId, isLoading]);
 
   const value = useMemo(
-    () => ({ state, dispatch, isLoading, canUndo, canRedo, undo, redo }),
-    [state, dispatch, isLoading, canUndo, canRedo, undo, redo],
+    () => ({
+      state,
+      dispatch,
+      isLoading,
+      canUndo,
+      canRedo,
+      undo,
+      redo,
+      scope,
+      trash,
+      favorites,
+      toggleFavorite,
+      moveToTrash,
+      restoreFromTrash,
+      deleteForever,
+    }),
+    [
+      state,
+      dispatch,
+      isLoading,
+      canUndo,
+      canRedo,
+      undo,
+      redo,
+      scope,
+      trash,
+      favorites,
+      toggleFavorite,
+      moveToTrash,
+      restoreFromTrash,
+      deleteForever,
+    ],
   );
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
